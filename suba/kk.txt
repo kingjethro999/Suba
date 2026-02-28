@@ -1,0 +1,2773 @@
+i am still getting the error, here are some of my project files to help you figure out where the error is coming from.
+
+// suba-frontend/src/features/profile/ProfileScreen.js
+import React, { useState, useContext, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Alert, 
+  TextInput, 
+  ScrollView, 
+  Image,
+  Switch,
+  ActivityIndicator,
+  Modal,
+  Platform
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../../contexts/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
+import { updateUserProfile, uploadUserAvatar, deleteUserAccount } from '../../services/userService';
+import { API_URL } from '../../config/api';
+
+export default function ProfileScreen({ navigation }) {
+  const { user, updateUser, logout } = useContext(AuthContext);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [avatar, setAvatar] = useState(user?.avatar_url || null);
+  const [formData, setFormData] = useState({
+    full_name: user?.full_name || '',
+    email: user?.email || '',
+    phone_number: user?.phone_number || '',
+    country: user?.country || '',
+    default_currency: user?.default_currency || 'NGN',
+    prefers_dark_mode: user?.prefers_dark_mode || false,
+  });
+
+  // Update form data when user changes
+  useEffect(() => {
+    setFormData({
+      full_name: user?.full_name || '',
+      email: user?.email || '',
+      phone_number: user?.phone_number || '',
+      country: user?.country || '',
+      default_currency: user?.default_currency || 'NGN',
+      prefers_dark_mode: user?.prefers_dark_mode || false,
+    });
+    setAvatar(user?.avatar_url || null);
+  }, [user]);
+
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant camera roll permissions to change your profile picture');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        await handleAvatarUpload(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant camera permissions to take a photo');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        await handleAvatarUpload(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  const handleAvatarUpload = async (avatarUri) => {
+    setAvatarLoading(true);
+    try {
+      // Upload to backend - now returns just the URL string
+      const avatarUrl = await uploadUserAvatar(avatarUri);
+      
+      // Update local state with the string
+      setAvatar(avatarUrl);
+      
+      // Update user context with the string
+      updateUser({ ...user, avatar_url: avatarUrl });
+      
+      Alert.alert('Success', 'Profile picture updated!');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', error.message || 'Failed to upload profile picture');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      // Update profile via API
+      const response = await updateUserProfile(formData);
+      
+      // Update user context with new data
+      updateUser({ ...user, ...response.user });
+      
+      Alert.alert('Success', 'Profile updated successfully!');
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', error.message || 'Failed to update profile');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsLoading(true);
+    try {
+      await deleteUserAccount();
+      Alert.alert('Success', 'Your account has been deleted successfully');
+      logout();
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      Alert.alert('Error', error.message || 'Failed to delete account');
+    } finally {
+      setIsLoading(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    logout();
+  };
+
+  const handleCancel = () => {
+    setFormData({
+      full_name: user?.full_name || '',
+      email: user?.email || '',
+      phone_number: user?.phone_number || '',
+      country: user?.country || '',
+      default_currency: user?.default_currency || 'NGN',
+      prefers_dark_mode: user?.prefers_dark_mode || false,
+    });
+    setIsEditing(false);
+  };
+
+  const getCurrencySymbol = (currency) => {
+    return currency === 'NGN' ? '₦' : '$';
+  };
+
+  const getCurrencyName = (currency) => {
+    return currency === 'NGN' ? 'Naira' : 'US Dollar';
+  };
+
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return 'Not set';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 10) {
+      return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+    }
+    if (cleaned.length === 11 && cleaned.startsWith('1')) {
+      return cleaned.replace(/(\d{1})(\d{3})(\d{3})(\d{4})/, '+$1 ($2) $3-$4');
+    }
+    return phone;
+  };
+
+  // Helper function to get avatar URI safely
+  const getAvatarUri = (avatarData) => {
+    if (typeof avatarData === 'object' && avatarData.uri) {
+      return avatarData.uri;
+    }
+    return avatarData;
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#4B5FFF" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Profile</Text>
+        {isEditing ? (
+          <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
+            <Ionicons name="create-outline" size={24} color="#4B5FFF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarContainer}>
+            {avatarLoading ? (
+              <View style={styles.avatarPlaceholder}>
+                <ActivityIndicator size="large" color="#4B5FFF" />
+              </View>
+            ) : avatar ? (
+              <Image 
+                source={{ 
+                  uri: getAvatarUri(avatar).includes('http') 
+                    ? getAvatarUri(avatar) 
+                    : `${API_URL}${getAvatarUri(avatar)}`
+                }} 
+                style={styles.avatar} 
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={40} color="#4B5FFF" />
+              </View>
+            )}
+            {isEditing && !avatarLoading && (
+              <TouchableOpacity style={styles.cameraButton} onPress={pickImage}>
+                <Ionicons name="camera" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
+          <Text style={styles.userEmail}>{user?.email}</Text>
+          
+          {isEditing && (
+            <TouchableOpacity style={styles.changePhotoButton} onPress={takePhoto}>
+              <Ionicons name="camera-outline" size={16} color="#4B5FFF" />
+              <Text style={styles.changePhotoText}>Take Photo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Personal Information Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Full Name</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.full_name}
+                onChangeText={(text) => setFormData({...formData, full_name: text})}
+                placeholder="Enter your full name"
+                editable={isEditing}
+              />
+            ) : (
+              <Text style={styles.value}>{user?.full_name || 'Not set'}</Text>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <Text style={styles.value}>{user?.email}</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.phone_number}
+                onChangeText={(text) => setFormData({...formData, phone_number: text})}
+                placeholder="Enter your phone number"
+                keyboardType="phone-pad"
+                editable={isEditing}
+              />
+            ) : (
+              <Text style={styles.value}>{formatPhoneNumber(user?.phone_number)}</Text>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Country</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.country}
+                onChangeText={(text) => setFormData({...formData, country: text})}
+                placeholder="Enter your country"
+                editable={isEditing}
+              />
+            ) : (
+              <Text style={styles.value}>{user?.country || 'Not set'}</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Preferences Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Default Currency</Text>
+            {isEditing ? (
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => {
+                  Alert.alert(
+                    "Select Currency",
+                    "Choose your default currency",
+                    [
+                      {
+                        text: "Naira (₦)",
+                        onPress: () => setFormData({...formData, default_currency: 'NGN'})
+                      },
+                      {
+                        text: "US Dollar ($)",
+                        onPress: () => setFormData({...formData, default_currency: 'USD'})
+                      },
+                      {
+                        text: "Cancel",
+                        style: "cancel"
+                      }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.pickerText}>
+                  {getCurrencyName(formData.default_currency)} ({getCurrencySymbol(formData.default_currency)})
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#4B5FFF" />
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.value}>
+                {getCurrencyName(user?.default_currency)} ({getCurrencySymbol(user?.default_currency)})
+              </Text>
+            )}
+          </View>
+
+          <View style={[styles.inputGroup, styles.switchGroup]}>
+            <View style={styles.switchLeft}>
+              <Ionicons name="moon-outline" size={22} color="#4B5FFF" />
+              <View>
+                <Text style={styles.label}>Dark Mode</Text>
+                <Text style={styles.switchSubtitle}>Switch to dark theme</Text>
+              </View>
+            </View>
+            <Switch
+              value={formData.prefers_dark_mode}
+              onValueChange={(value) => setFormData({...formData, prefers_dark_mode: value})}
+              trackColor={{ false: '#E5E7EB', true: '#4B5FFF' }}
+              thumbColor={formData.prefers_dark_mode ? '#fff' : '#f4f3f4'}
+              disabled={!isEditing}
+            />
+          </View>
+        </View>
+
+        {/* Save Button */}
+        {isEditing && (
+          <TouchableOpacity 
+            style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.saveButtonText}>Save Changes</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Account Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Actions</Text>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setShowLogoutModal(true)}
+          >
+            <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+            <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setShowDeleteModal(true)}
+          >
+            <Ionicons name="trash-bin-outline" size={22} color="#EF4444" />
+            <Text style={[styles.actionText, styles.deleteText]}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* App Version */}
+        <View style={styles.versionContainer}>
+          <Text style={styles.versionText}>Suba App v1.0.0</Text>
+          <Text style={styles.versionSubtext}>Build 100 • © 2024 Suba</Text>
+        </View>
+      </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Logout</Text>
+            <Text style={styles.modalMessage}>Are you sure you want to logout?</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleLogout}
+              >
+                <Text style={styles.modalButtonTextConfirm}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Delete Account</Text>
+            <Text style={styles.modalMessage}>
+              This action cannot be undone. All your data including subscriptions will be permanently deleted.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeleteModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleDeleteAccount}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonTextConfirm}>Delete Account</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F9FAFB' 
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  backButton: { 
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+
+    title: { 
+    fontSize: 20, 
+    fontWeight: '800', 
+    color: '#1F2937' 
+  },
+  editButton: { 
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  cancelButton: {
+    padding: 8,
+  },
+  cancelText: {
+    color: '#6B7280',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  content: {
+    flex: 1,
+    padding: 20
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 30,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  avatarPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#E5E7EB',
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#4B5FFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  userEmail: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  changePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    gap: 8,
+  },
+  changePhotoText: {
+    color: '#4B5FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  value: {
+    fontSize: 16,
+    color: '#1F2937',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  pickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  pickerText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  switchGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  switchLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  switchSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    marginLeft: 12,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4B5FFF',
+    padding: 18,
+    borderRadius: 16,
+    gap: 12,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#4B5FFF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  logoutText: {
+    color: '#EF4444',
+  },
+  deleteText: {
+    color: '#EF4444',
+  },
+  versionContainer: {
+    alignItems: 'center',
+    padding: 20,
+    marginBottom: 20,
+  },
+  versionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  versionSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#EF4444',
+  },
+  modalButtonTextCancel: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  modalButtonTextConfirm: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+});
+
+// suba-frontend/src/features/profile/ProfileScreen.js
+import React, { useState, useContext, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  Alert, 
+  TextInput, 
+  ScrollView, 
+  Image,
+  Switch,
+  ActivityIndicator,
+  Modal,
+  Platform
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../../contexts/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
+import { updateUserProfile, uploadUserAvatar, deleteUserAccount } from '../../services/userService';
+import { API_URL } from '../../config/api';
+
+export default function ProfileScreen({ navigation }) {
+  const { user, updateUser, logout } = useContext(AuthContext);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [avatar, setAvatar] = useState(user?.avatar_url || null);
+  const [formData, setFormData] = useState({
+    full_name: user?.full_name || '',
+    email: user?.email || '',
+    phone_number: user?.phone_number || '',
+    country: user?.country || '',
+    default_currency: user?.default_currency || 'NGN',
+    prefers_dark_mode: user?.prefers_dark_mode || false,
+  });
+
+  // Update form data when user changes
+  useEffect(() => {
+    setFormData({
+      full_name: user?.full_name || '',
+      email: user?.email || '',
+      phone_number: user?.phone_number || '',
+      country: user?.country || '',
+      default_currency: user?.default_currency || 'NGN',
+      prefers_dark_mode: user?.prefers_dark_mode || false,
+    });
+    setAvatar(user?.avatar_url || null);
+  }, [user]);
+
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant camera roll permissions to change your profile picture');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        await handleAvatarUpload(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant camera permissions to take a photo');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        await handleAvatarUpload(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
+  const handleAvatarUpload = async (avatarUri) => {
+    setAvatarLoading(true);
+    try {
+      // Upload to backend - now returns just the URL string
+      const avatarUrl = await uploadUserAvatar(avatarUri);
+      
+      // Update local state with the string
+      setAvatar(avatarUrl);
+      
+      // Update user context with the string
+      updateUser({ ...user, avatar_url: avatarUrl });
+      
+      Alert.alert('Success', 'Profile picture updated!');
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', error.message || 'Failed to upload profile picture');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      // Update profile via API
+      const response = await updateUserProfile(formData);
+      
+      // Update user context with new data
+      updateUser({ ...user, ...response.user });
+      
+      Alert.alert('Success', 'Profile updated successfully!');
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', error.message || 'Failed to update profile');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsLoading(true);
+    try {
+      await deleteUserAccount();
+      Alert.alert('Success', 'Your account has been deleted successfully');
+      logout();
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      Alert.alert('Error', error.message || 'Failed to delete account');
+    } finally {
+      setIsLoading(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    logout();
+  };
+
+  const handleCancel = () => {
+    setFormData({
+      full_name: user?.full_name || '',
+      email: user?.email || '',
+      phone_number: user?.phone_number || '',
+      country: user?.country || '',
+      default_currency: user?.default_currency || 'NGN',
+      prefers_dark_mode: user?.prefers_dark_mode || false,
+    });
+    setIsEditing(false);
+  };
+
+  const getCurrencySymbol = (currency) => {
+    return currency === 'NGN' ? '₦' : '$';
+  };
+
+  const getCurrencyName = (currency) => {
+    return currency === 'NGN' ? 'Naira' : 'US Dollar';
+  };
+
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return 'Not set';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 10) {
+      return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+    }
+    if (cleaned.length === 11 && cleaned.startsWith('1')) {
+      return cleaned.replace(/(\d{1})(\d{3})(\d{3})(\d{4})/, '+$1 ($2) $3-$4');
+    }
+    return phone;
+  };
+
+  // Helper function to get avatar URI safely
+  const getAvatarUri = (avatarData) => {
+    if (typeof avatarData === 'object' && avatarData.uri) {
+      return avatarData.uri;
+    }
+    return avatarData;
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#4B5FFF" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Profile</Text>
+        {isEditing ? (
+          <TouchableOpacity onPress={handleCancel} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
+            <Ionicons name="create-outline" size={24} color="#4B5FFF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarContainer}>
+            {avatarLoading ? (
+              <View style={styles.avatarPlaceholder}>
+                <ActivityIndicator size="large" color="#4B5FFF" />
+              </View>
+            ) : avatar ? (
+              <Image 
+                source={{ 
+                  uri: getAvatarUri(avatar).includes('http') 
+                    ? getAvatarUri(avatar) 
+                    : `${API_URL}${getAvatarUri(avatar)}`
+                }} 
+                style={styles.avatar} 
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={40} color="#4B5FFF" />
+              </View>
+            )}
+            {isEditing && !avatarLoading && (
+              <TouchableOpacity style={styles.cameraButton} onPress={pickImage}>
+                <Ionicons name="camera" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
+          <Text style={styles.userEmail}>{user?.email}</Text>
+          
+          {isEditing && (
+            <TouchableOpacity style={styles.changePhotoButton} onPress={takePhoto}>
+              <Ionicons name="camera-outline" size={16} color="#4B5FFF" />
+              <Text style={styles.changePhotoText}>Take Photo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Personal Information Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Full Name</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.full_name}
+                onChangeText={(text) => setFormData({...formData, full_name: text})}
+                placeholder="Enter your full name"
+                editable={isEditing}
+              />
+            ) : (
+              <Text style={styles.value}>{user?.full_name || 'Not set'}</Text>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <Text style={styles.value}>{user?.email}</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.phone_number}
+                onChangeText={(text) => setFormData({...formData, phone_number: text})}
+                placeholder="Enter your phone number"
+                keyboardType="phone-pad"
+                editable={isEditing}
+              />
+            ) : (
+              <Text style={styles.value}>{formatPhoneNumber(user?.phone_number)}</Text>
+            )}
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Country</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={formData.country}
+                onChangeText={(text) => setFormData({...formData, country: text})}
+                placeholder="Enter your country"
+                editable={isEditing}
+              />
+            ) : (
+              <Text style={styles.value}>{user?.country || 'Not set'}</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Preferences Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Default Currency</Text>
+            {isEditing ? (
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => {
+                  Alert.alert(
+                    "Select Currency",
+                    "Choose your default currency",
+                    [
+                      {
+                        text: "Naira (₦)",
+                        onPress: () => setFormData({...formData, default_currency: 'NGN'})
+                      },
+                      {
+                        text: "US Dollar ($)",
+                        onPress: () => setFormData({...formData, default_currency: 'USD'})
+                      },
+                      {
+                        text: "Cancel",
+                        style: "cancel"
+                      }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.pickerText}>
+                  {getCurrencyName(formData.default_currency)} ({getCurrencySymbol(formData.default_currency)})
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#4B5FFF" />
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.value}>
+                {getCurrencyName(user?.default_currency)} ({getCurrencySymbol(user?.default_currency)})
+              </Text>
+            )}
+          </View>
+
+          <View style={[styles.inputGroup, styles.switchGroup]}>
+            <View style={styles.switchLeft}>
+              <Ionicons name="moon-outline" size={22} color="#4B5FFF" />
+              <View>
+                <Text style={styles.label}>Dark Mode</Text>
+                <Text style={styles.switchSubtitle}>Switch to dark theme</Text>
+              </View>
+            </View>
+            <Switch
+              value={formData.prefers_dark_mode}
+              onValueChange={(value) => setFormData({...formData, prefers_dark_mode: value})}
+              trackColor={{ false: '#E5E7EB', true: '#4B5FFF' }}
+              thumbColor={formData.prefers_dark_mode ? '#fff' : '#f4f3f4'}
+              disabled={!isEditing}
+            />
+          </View>
+        </View>
+
+        {/* Save Button */}
+        {isEditing && (
+          <TouchableOpacity 
+            style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.saveButtonText}>Save Changes</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Account Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Actions</Text>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setShowLogoutModal(true)}
+          >
+            <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+            <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => setShowDeleteModal(true)}
+          >
+            <Ionicons name="trash-bin-outline" size={22} color="#EF4444" />
+            <Text style={[styles.actionText, styles.deleteText]}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* App Version */}
+        <View style={styles.versionContainer}>
+          <Text style={styles.versionText}>Suba App v1.0.0</Text>
+          <Text style={styles.versionSubtext}>Build 100 • © 2024 Suba</Text>
+        </View>
+      </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Logout</Text>
+            <Text style={styles.modalMessage}>Are you sure you want to logout?</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowLogoutModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleLogout}
+              >
+                <Text style={styles.modalButtonTextConfirm}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Delete Account</Text>
+            <Text style={styles.modalMessage}>
+              This action cannot be undone. All your data including subscriptions will be permanently deleted.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeleteModal(false)}
+              >
+                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleDeleteAccount}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonTextConfirm}>Delete Account</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F9FAFB' 
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  backButton: { 
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+
+    title: { 
+    fontSize: 20, 
+    fontWeight: '800', 
+    color: '#1F2937' 
+  },
+  editButton: { 
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  cancelButton: {
+    padding: 8,
+  },
+  cancelText: {
+    color: '#6B7280',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  content: {
+    flex: 1,
+    padding: 20
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 30,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  avatarPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#E5E7EB',
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#4B5FFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  userEmail: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  changePhotoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    gap: 8,
+  },
+  changePhotoText: {
+    color: '#4B5FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  value: {
+    fontSize: 16,
+    color: '#1F2937',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  pickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  pickerText: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  switchGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  switchLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  switchSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    marginLeft: 12,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4B5FFF',
+    padding: 18,
+    borderRadius: 16,
+    gap: 12,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#4B5FFF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
+  },
+  logoutText: {
+    color: '#EF4444',
+  },
+  deleteText: {
+    color: '#EF4444',
+  },
+  versionContainer: {
+    alignItems: 'center',
+    padding: 20,
+    marginBottom: 20,
+  },
+  versionText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  versionSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F3F4F6',
+  },
+  modalButtonConfirm: {
+    backgroundColor: '#EF4444',
+  },
+  modalButtonTextCancel: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  modalButtonTextConfirm: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+});
+
+// suba-frontend/src/features/settings/SettingsScreen.js
+import React, { useState, useContext, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Switch,
+  TouchableOpacity,
+  Alert,
+  Linking,
+  StatusBar,
+  Platform,
+  AppState,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../../contexts/AuthContext';
+import { useAuth } from '../../features/auth/useAuth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+
+// Constants for storage keys
+const SETTINGS_KEYS = {
+  NOTIFICATIONS: 'settings_notifications',
+  DARK_MODE: 'settings_dark_mode',
+  CURRENCY: 'settings_currency',
+  REMINDER_DAYS: 'settings_reminder_days',
+};
+
+export default function SettingsScreen({ navigation }) {
+  const { user } = useContext(AuthContext);
+  const { logout } = useAuth();
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [currency, setCurrency] = useState(user?.default_currency || 'NGN');
+  const [reminderDays, setReminderDays] = useState(3);
+  const [appVersion] = useState('1.0.0');
+
+  // Load saved settings on component mount
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  // Save settings when they change
+  useEffect(() => {
+    saveSettings();
+  }, [notifications, darkMode, currency, reminderDays]);
+
+  const loadSettings = async () => {
+    try {
+      const [
+        savedNotifications,
+        savedDarkMode,
+        savedCurrency,
+        savedReminderDays,
+      ] = await Promise.all([
+        AsyncStorage.getItem(SETTINGS_KEYS.NOTIFICATIONS),
+        AsyncStorage.getItem(SETTINGS_KEYS.DARK_MODE),
+        AsyncStorage.getItem(SETTINGS_KEYS.CURRENCY),
+        AsyncStorage.getItem(SETTINGS_KEYS.REMINDER_DAYS),
+      ]);
+
+      if (savedNotifications !== null) setNotifications(JSON.parse(savedNotifications));
+      if (savedDarkMode !== null) setDarkMode(JSON.parse(savedDarkMode));
+      if (savedCurrency !== null) setCurrency(savedCurrency);
+      if (savedReminderDays !== null) setReminderDays(JSON.parse(savedReminderDays));
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(SETTINGS_KEYS.NOTIFICATIONS, JSON.stringify(notifications)),
+        AsyncStorage.setItem(SETTINGS_KEYS.DARK_MODE, JSON.stringify(darkMode)),
+        AsyncStorage.setItem(SETTINGS_KEYS.CURRENCY, currency),
+        AsyncStorage.setItem(SETTINGS_KEYS.REMINDER_DAYS, JSON.stringify(reminderDays)),
+      ]);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        { 
+          text: "Logout", 
+          onPress: () => logout(),
+          style: "destructive"
+        }
+      ]
+    );
+  };
+
+  const openPrivacyPolicy = () => {
+    Linking.openURL('https://suba-app.com/privacy');
+  };
+
+  const openTermsOfService = () => {
+    Linking.openURL('https://suba-app.com/terms');
+  };
+
+  const openSupport = () => {
+    Linking.openURL('mailto:support@suba.com?subject=Support Request');
+  };
+
+  const exportData = async () => {
+    try {
+      // Get subscriptions data
+      const { getSubscriptions } = require('../subscriptions/subscriptionService');
+      const subscriptions = await getSubscriptions();
+      
+      // Create CSV content
+      const csvContent = subscriptions.map(sub => 
+        `"${sub.name}",${sub.amount},${sub.currency},${sub.billing_cycle},"${sub.next_billing_date}"`
+      ).join('\n');
+      
+      const csvHeader = 'Name,Amount,Currency,Billing Cycle,Next Billing Date\n';
+      const fullCsv = csvHeader + csvContent;
+      
+      // Save file locally
+      const fileUri = FileSystem.documentDirectory + 'suba_export.csv';
+      await FileSystem.writeAsStringAsync(fileUri, fullCsv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      
+      // Share the file
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'text/csv',
+        dialogTitle: 'Export Your Subscriptions',
+        UTI: 'public.comma-separated-values-text',
+      });
+      
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      Alert.alert('Error', 'Failed to export data. Please try again.');
+    }
+  };
+
+  const clearCache = async () => {
+    try {
+      // Get all keys except settings and auth
+      const allKeys = await AsyncStorage.getAllKeys();
+      const keysToRemove = allKeys.filter(key => 
+        !key.includes('settings_') && 
+        key !== 'token' && 
+        key !== 'user'
+      );
+      
+      await AsyncStorage.multiRemove(keysToRemove);
+      Alert.alert('Success', 'Cache cleared successfully!');
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+      Alert.alert('Error', 'Failed to clear cache.');
+    }
+  };
+
+  const rateApp = () => {
+    // For iOS
+    if (Platform.OS === 'ios') {
+      Linking.openURL('itms-apps://itunes.apple.com/app/idYOUR_APP_ID');
+    } else {
+      // For Android
+      Linking.openURL('market://details?id=com.yourcompany.suba');
+    }
+  };
+
+  const handleCurrencyChange = (newCurrency) => {
+    setCurrency(newCurrency);
+    // Update user's default currency in backend (you'd need to implement this API)
+    console.log('Currency changed to:', newCurrency);
+    // updateUserCurrency(newCurrency); // Implement this function
+  };
+
+  const handleReminderDaysChange = (days) => {
+    setReminderDays(days);
+    // Update reminder settings in backend
+    console.log('Reminder days changed to:', days);
+    // updateReminderSettings(days); // Implement this function
+  };
+
+  const navigateToProfile = () => {
+    navigation.navigate('Profile');
+  };
+
+  const navigateToSecurity = () => {
+    navigation.navigate('Security');
+  };
+
+  const showAbout = () => {
+    Alert.alert(
+      'About Suba',
+      `Version: ${appVersion}\n\nA smart subscription management app that helps you track and optimize your recurring payments.`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  const Section = ({ title, children }) => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+
+  const SettingItem = ({ icon, title, subtitle, rightComponent, onPress }) => (
+    <TouchableOpacity 
+      style={styles.settingItem} 
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.settingLeft}>
+        <Ionicons name={icon} size={22} color="#4B5FFF" style={styles.settingIcon} />
+        <View>
+          <Text style={styles.settingTitle}>{title}</Text>
+          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      {rightComponent}
+    </TouchableOpacity>
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Ionicons name="settings-outline" size={28} color="#4B5FFF" />
+          <Text style={styles.headerTitle}>Settings</Text>
+        </View>
+
+        {/* Account Section */}
+        <Section title="Account">
+          <SettingItem
+            icon="person-outline"
+            title="Profile"
+            subtitle={user?.email}
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={navigateToProfile}
+          />
+          <SettingItem
+            icon="shield-checkmark-outline"
+            title="Security"
+            subtitle="Password, 2FA"
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={navigateToSecurity}
+          />
+        </Section>
+
+        {/* Preferences Section */}
+        <Section title="Preferences">
+          <SettingItem
+            icon="notifications-outline"
+            title="Notifications"
+            subtitle="Payment reminders & insights"
+            rightComponent={
+              <Switch
+                value={notifications}
+                onValueChange={setNotifications}
+                trackColor={{ false: '#E5E7EB', true: '#4B5FFF' }}
+                thumbColor={notifications ? '#fff' : '#f4f3f4'}
+              />
+            }
+          />
+          <SettingItem
+            icon="moon-outline"
+            title="Dark Mode"
+            subtitle="Switch to dark theme"
+            rightComponent={
+              <Switch
+                value={darkMode}
+                onValueChange={setDarkMode}
+                trackColor={{ false: '#E5E7EB', true: '#4B5FFF' }}
+                thumbColor={darkMode ? '#fff' : '#f4f3f4'}
+              />
+            }
+          />
+          <SettingItem
+            icon="cash-outline"
+            title="Default Currency"
+            subtitle={currency === 'NGN' ? 'Naira (₦)' : 'US Dollar ($)'}
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={() => {
+              Alert.alert(
+                "Select Currency",
+                "Choose your default currency",
+                [
+                  {
+                    text: "Naira (₦)",
+                    onPress: () => handleCurrencyChange('NGN')
+                  },
+                  {
+                    text: "US Dollar ($)",
+                    onPress: () => handleCurrencyChange('USD')
+                  },
+                  {
+                    text: "Cancel",
+                    style: "cancel"
+                  }
+                ]
+              );
+            }}
+          />
+          <SettingItem
+            icon="alarm-outline"
+            title="Reminder Timing"
+            subtitle={`${reminderDays} days before payment`}
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={() => {
+              Alert.alert(
+                "Reminder Timing",
+                "How many days before payment should we remind you?",
+                [
+                  { text: "1 day", onPress: () => handleReminderDaysChange(1) },
+                  { text: "3 days", onPress: () => handleReminderDaysChange(3) },
+                  { text: "7 days", onPress: () => handleReminderDaysChange(7) },
+                  { text: "Cancel", style: "cancel" }
+                ]
+              );
+            }}
+          />
+        </Section>
+
+        {/* Data Management Section */}
+        <Section title="Data & Privacy">
+          <SettingItem
+            icon="download-outline"
+            title="Export Data"
+            subtitle="Download your subscription data"
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={exportData}
+          />
+          <SettingItem
+            icon="trash-outline"
+            title="Clear Cache"
+            subtitle="Free up storage space"
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={() => {
+              Alert.alert(
+                "Clear Cache",
+                "This will remove temporary data but keep your subscriptions safe.",
+                [
+                  {
+                    text: "Cancel",
+                    style: "cancel"
+                  },
+                  {
+                    text: "Clear",
+                    onPress: clearCache,
+                    style: "destructive"
+                  }
+                ]
+              );
+            }}
+          />
+          <SettingItem
+            icon="document-text-outline"
+            title="Privacy Policy"
+            rightComponent={<Ionicons name="open-outline" size={20} color="#9CA3AF" />}
+            onPress={openPrivacyPolicy}
+          />
+          <SettingItem
+            icon="document-lock-outline"
+            title="Terms of Service"
+            rightComponent={<Ionicons name="open-outline" size={20} color="#9CA3AF" />}
+            onPress={openTermsOfService}
+          />
+        </Section>
+
+        {/* Support Section */}
+        <Section title="Support">
+          <SettingItem
+            icon="help-circle-outline"
+            title="Help & Support"
+            subtitle="Get help with the app"
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={openSupport}
+          />
+          <SettingItem
+            icon="star-outline"
+            title="Rate the App"
+            subtitle="Share your experience"
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={rateApp}
+          />
+          <SettingItem
+            icon="information-circle-outline"
+            title="About"
+            subtitle={`Version ${appVersion} • Build 100`}
+            rightComponent={<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />}
+            onPress={showAbout}
+          />
+        </Section>
+
+        {/* Danger Zone Section */}
+        <Section title="Account Actions">
+          <TouchableOpacity 
+            style={[styles.settingItem, styles.logoutButton]}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+            <Text style={[styles.settingTitle, styles.logoutText]}>Logout</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.settingItem, styles.deleteButton]}
+            onPress={() => {
+              Alert.alert(
+                "Delete Account",
+                "This action cannot be undone. All your data will be permanently deleted.",
+                [
+                  {
+                    text: "Cancel",
+                    style: "cancel"
+                  },
+                  {
+                    text: "Delete Account",
+                    onPress: () => console.log('Account deletion requested'),
+                    style: "destructive"
+                  }
+                ]
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trash-bin-outline" size={22} color="#EF4444" />
+            <Text style={[styles.settingTitle, styles.deleteText]}>Delete Account</Text>
+          </TouchableOpacity>
+        </Section>
+
+        {/* App Info Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Suba • Subscription Manager</Text>
+          <Text style={styles.footerSubtext}>© 2024 Suba App. All rights reserved.</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 8 : 24,
+    paddingBottom: 40,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginLeft: 12,
+  },
+  section: {
+    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  settingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  settingIcon: {
+    marginRight: 12,
+    width: 24,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  settingSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  logoutButton: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 8,
+  },
+  logoutText: {
+    color: '#EF4444',
+    marginLeft: 12,
+  },
+  deleteButton: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  deleteText: {
+    color: '#EF4444',
+    marginLeft: 12,
+  },
+  footer: {
+    alignItems: 'center',
+    padding: 24,
+    marginBottom: 24,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  footerSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+});
+
+// suba-frontend/src/features/subscriptions/AddSubscriptionScreen.js
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Platform,
+  ScrollView,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Modal,
+} from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { Ionicons } from "@expo/vector-icons";
+import { Picker } from "@react-native-picker/picker";
+import { LinearGradient } from 'expo-linear-gradient';
+import { addSubscription } from "./subscriptionService";
+
+export default function AddSubscriptionScreen({ navigation, route }) {
+  const [form, setForm] = useState({
+    name: "",
+    amount: "",
+    billing_cycle: "monthly",
+    currency: "NGN",
+    next_billing_date: new Date(),
+  });
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showBillingCyclePicker, setShowBillingCyclePicker] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleChange = (field, value) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      Alert.alert("Error", "Please enter a service name");
+      return;
+    }
+
+    if (!form.amount || Number(form.amount) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const payload = {
+        name: form.name,
+        amount: Number(form.amount),
+        billing_cycle: form.billing_cycle,
+        currency: form.currency,
+        next_billing_date: form.next_billing_date.toISOString().split("T")[0],
+      };
+
+      console.log('Sending payload:', payload);
+
+      const res = await addSubscription(payload);
+      if (res.id) {
+        Alert.alert("Success", "Subscription added successfully! 🎉", [
+          {
+            text: "OK",
+            onPress: () => {
+              if (route.params?.refreshSubscriptions) {
+                route.params.refreshSubscriptions();
+              }
+              navigation.goBack();
+            }
+          }
+        ]);
+      } else {
+        Alert.alert("Error", res.message || "Failed to add subscription");
+      }
+    } catch (err) {
+      console.error('Add subscription error:', err);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAmountChange = (value) => {
+    const cleanedValue = value.replace(/[^0-9.]/g, "");
+    const decimalCount = (cleanedValue.match(/\./g) || []).length;
+    if (decimalCount <= 1) {
+      handleChange("amount", cleanedValue);
+    }
+  };
+
+  // Get currency symbol based on selected currency
+  const getCurrencySymbol = () => {
+    return form.currency === 'NGN' ? '₦' : '$';
+  };
+
+  // Get billing cycle display text
+  const getBillingCycleText = () => {
+    switch (form.billing_cycle) {
+      case 'daily': return 'Daily';
+      case 'weekly': return 'Weekly';
+      case 'monthly': return 'Monthly';
+      case 'yearly': return 'Yearly';
+      default: return 'Monthly';
+    }
+  };
+
+  // Get currency display text
+  const getCurrencyText = () => {
+    return form.currency === 'NGN' ? 'Naira (₦)' : 'US Dollar ($)';
+  };
+
+  // Custom Picker Modal Component
+  const PickerModal = ({ visible, onClose, title, selectedValue, onValueChange, items }) => (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={24} color="#4B5FFF" />
+            </TouchableOpacity>
+          </View>
+          <Picker
+            selectedValue={selectedValue}
+            onValueChange={onValueChange}
+            style={styles.modalPicker}
+          >
+            {items.map((item) => (
+              <Picker.Item key={item.value} label={item.label} value={item.value} />
+            ))}
+          </Picker>
+          <TouchableOpacity onPress={onClose} style={styles.modalDoneButton}>
+            <Text style={styles.modalDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Ionicons name="arrow-back" size={24} color="#4B5FFF" />
+            </TouchableOpacity>
+            <Text style={styles.title}>Add Subscription</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+
+          {/* Form Container */}
+          <View style={styles.formContainer}>
+            {/* Service Name Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Service Name *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="business-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  placeholder="e.g., Netflix, Spotify, DSTV"
+                  placeholderTextColor="#9CA3AF"
+                  value={form.name}
+                  onChangeText={(val) => handleChange("name", val)}
+                  style={styles.input}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+
+            {/* Currency Picker */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Currency *</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowCurrencyPicker(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.pickerButtonContent}>
+                  <Ionicons name="cash-outline" size={20} color="#6B7280" style={styles.pickerIcon} />
+                  <Text style={styles.pickerButtonText}>
+                    {getCurrencyText()}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color="#4B5FFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Amount Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Amount *</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="card-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  placeholder="0.00"
+                  placeholderTextColor="#9CA3AF"
+                  value={form.amount}
+                  onChangeText={handleAmountChange}
+                  keyboardType="decimal-pad"
+                  style={styles.input}
+                />
+                <Text style={styles.currencySymbol}>{getCurrencySymbol()}</Text>
+              </View>
+            </View>
+
+            {/* Billing Cycle Picker */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Billing Cycle *</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowBillingCyclePicker(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.pickerButtonContent}>
+                  <Ionicons name="repeat-outline" size={20} color="#6B7280" style={styles.pickerIcon} />
+                  <Text style={styles.pickerButtonText}>
+                    {getBillingCycleText()}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color="#4B5FFF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Next Billing Date */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Next Billing Date *</Text>
+              <TouchableOpacity 
+                style={styles.pickerButton}
+                onPress={() => setShowDatePicker(true)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.pickerButtonContent}>
+                  <Ionicons name="calendar-outline" size={20} color="#6B7280" style={styles.pickerIcon} />
+                  <Text style={styles.pickerButtonText}>
+                    {form.next_billing_date
+                      ? form.next_billing_date.toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric'
+                        })
+                      : "Select date"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={20} color="#4B5FFF" />
+              </TouchableOpacity>
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={form.next_billing_date}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                minimumDate={new Date()}
+                onChange={(event, selectedDate) => {
+                  setShowDatePicker(false);
+                  if (selectedDate) {
+                    handleChange("next_billing_date", selectedDate);
+                  }
+                }}
+              />
+            )}
+          </View>
+
+          {/* Save Button */}
+          <TouchableOpacity 
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            onPress={handleSave}
+            disabled={isLoading}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#6D7BFF', '#A46BFF']}
+              start={[0, 0]}
+              end={[1, 0]}
+              style={styles.gradient}
+            >
+              {isLoading ? (
+                <Ionicons name="refresh" size={20} color="#fff" style={styles.loadingIcon} />
+              ) : (
+                <Ionicons name="checkmark-circle" size={20} color="#fff" style={styles.buttonIcon} />
+              )}
+              <Text style={styles.buttonText}>
+                {isLoading ? "Adding..." : "Add Subscription"}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Quick Tips */}
+          <View style={styles.tipsContainer}>
+            <Text style={styles.tipsTitle}>💡 Quick Tips</Text>
+            <View style={styles.tipItem}>
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+              <Text style={styles.tipText}>Use the exact service name (e.g., "DSTV" not "TV")</Text>
+            </View>
+            <View style={styles.tipItem}>
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+              <Text style={styles.tipText}>Select the correct currency for accurate tracking</Text>
+            </View>
+            <View style={styles.tipItem}>
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+              <Text style={styles.tipText}>Set the next billing date to avoid missing payments</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+
+      {/* Currency Picker Modal */}
+      <PickerModal
+        visible={showCurrencyPicker}
+        onClose={() => setShowCurrencyPicker(false)}
+        title="Select Currency"
+        selectedValue={form.currency}
+        onValueChange={(value) => handleChange("currency", value)}
+        items={[
+          { label: 'Naira (₦)', value: 'NGN' },
+          { label: 'US Dollar ($)', value: 'USD' },
+        ]}
+      />
+
+      {/* Billing Cycle Picker Modal */}
+      <PickerModal
+        visible={showBillingCyclePicker}
+        onClose={() => setShowBillingCyclePicker(false)}
+        title="Select Billing Cycle"
+        selectedValue={form.billing_cycle}
+        onValueChange={(value) => handleChange("billing_cycle", value)}
+        items={[
+          { label: 'Daily', value: 'daily' },
+          { label: 'Weekly', value: 'weekly' },
+          { label: 'Monthly', value: 'monthly' },
+          { label: 'Yearly', value: 'yearly' },
+        ]}
+      />
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 32,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#EEF2FF",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#1F2937",
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  formContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: "#1F2937",
+    height: "100%",
+  },
+  currencySymbol: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginLeft: 8,
+  },
+  pickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 16,
+    height: 56,
+  },
+  pickerButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  pickerIcon: {
+    marginRight: 12,
+  },
+  pickerButtonText: {
+    fontSize: 16,
+    color: "#1F2937",
+    flex: 1,
+  },
+  button: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 24,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  gradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  loadingIcon: {
+    marginRight: 8,
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  tipsContainer: {
+    backgroundColor: "#F0F9FF",
+    borderRadius: 16,
+    padding: 20,
+  },
+  tipsTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0369A1",
+    marginBottom: 12,
+  },
+  tipItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  tipText: {
+    fontSize: 14,
+    color: "#374151",
+    marginLeft: 8,
+    flex: 1,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '50%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalPicker: {
+    marginBottom: 16,
+  },
+  modalDoneButton: {
+    backgroundColor: '#4B5FFF',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalDoneText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+

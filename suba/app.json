@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "suba",
+    "slug": "suba-frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.bfg.subafrontend"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to update your profile picture.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to take a profile photo."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2e94c13b-cd06-4ab6-8647-ccc43413e36e"
+      }
+    },
+    "owner": "bfg"
+  }
+}

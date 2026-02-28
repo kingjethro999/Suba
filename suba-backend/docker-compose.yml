@@ -1,0 +1,60 @@
+services:
+  db:
+    image: mariadb:10.6
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpwd
+      MYSQL_DATABASE: suba_db
+      MYSQL_USER: suba
+      MYSQL_PASSWORD: subapwd
+    ports:
+      - "3306:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    environment:
+      PMA_HOST: db
+      PMA_USER: suba
+      PMA_PASSWORD: subapwd
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./suba-backend
+      dockerfile: Dockerfile
+    environment:
+      # App
+      NODE_ENV: production
+      PORT: 5000
+      JWT_SECRET: "super-secret-change-me"
+      CORS_ORIGIN: "*"          # tighten to your domains in prod
+
+      # DB (matches the db service above)
+      DB_HOST: db
+      DB_USER: suba
+      DB_PASSWORD: subapwd
+      DB_NAME: suba_db
+      DB_PORT: 3306
+    ports:
+      - "8080:5000"             # host:container
+    volumes:
+      - uploads:/app/uploads    # persist uploaded files
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  dbdata:
+  uploads:

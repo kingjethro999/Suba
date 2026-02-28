@@ -1,0 +1,2696 @@
+why a i getting this error?
+
+ ERROR  API Error: /payments/subscriptions/20/mark-paid 500 Request failed with status code 500
+ ERROR  Error marking payment as paid: [AxiosError: Request failed with status code 500]
+
+Error marking payment as paid: TypeError: Bind parameters must not contain undefined. To pass SQL NULL specify JS null
+    at C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\base\connection.js:660:17
+    at Array.forEach (<anonymous>)
+    at PoolConnection.execute (C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\base\connection.js:652:22)
+    at C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\promise\connection.js:56:11
+    at new Promise (<anonymous>)
+    at PromisePoolConnection.execute (C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\promise\connection.js:53:12)
+    at file:///C:/Users/USER/Desktop/React%20Native/suba-app/suba-backend/routes/paymentsRoutes.js:92:22
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+Error marking payment as paid: TypeError: Bind parameters must not contain undefined. To pass SQL NULL specify JS null
+    at C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\base\connection.js:660:17
+    at Array.forEach (<anonymous>)
+    at PoolConnection.execute (C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\base\connection.js:652:22)
+    at C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\promise\connection.js:56:11
+    at new Promise (<anonymous>)
+    at PromisePoolConnection.execute (C:\Users\USER\Desktop\React Native\suba-app\suba-backend\node_modules\mysql2\lib\promise\connection.js:53:12)
+    at file:///C:/Users/USER/Desktop/React%20Native/suba-app/suba-backend/routes/paymentsRoutes.js:92:22
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+// suba-frontend/src/features/subscriptions/SubscriptionDetailsScreen.js
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  Alert,
+  Share,
+  Image,
+  ActivityIndicator
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import LogoService from '../../services/LogoService';
+import { markSubscriptionAsPaid, cancelSubscription, getSubscriptionPayments, skipSubscriptionReminder } from './subscriptionService';
+import { PaymentService } from '../../services/paymentService';
+
+export default function SubscriptionDetailsScreen({ route, navigation }) {
+  const { subscription } = route.params || {};
+  const [serviceLogo, setServiceLogo] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+
+  // Load service logo and payment history
+  React.useEffect(() => {
+    if (subscription?.id) {
+      loadServiceLogo();
+      loadPaymentHistory();
+    }
+  }, [subscription]);
+
+  const loadServiceLogo = async () => {
+    try {
+      const logo = await LogoService.getLogoForSubscription(subscription.name);
+      setServiceLogo(logo);
+    } catch (error) {
+      console.error('Error loading service logo:', error);
+    }
+  };
+
+  const loadPaymentHistory = async () => {
+    try {
+      setLoadingPayments(true);
+      const payments = await getSubscriptionPayments(subscription.id);
+      setPaymentHistory(payments);
+    } catch (error) {
+      console.error('Error loading payment history:', error);
+    } finally {
+      setLoadingPayments(false);
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount, currency = 'NGN') => {
+    if (!amount) return currency === 'NGN' ? '₦0.00' : '$0.00';
+    const formattedAmount = Number(amount).toFixed(2);
+    return currency === 'NGN' ? `₦${formattedAmount}` : `$${formattedAmount}`;
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Not set';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  // Format short date
+  const formatShortDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Calculate days until next billing
+  const getDaysUntilBilling = () => {
+    if (!subscription?.next_billing_date || subscription.status !== 'active') return null;
+    
+    const today = new Date();
+    const nextBilling = new Date(subscription.next_billing_date);
+    const timeDiff = nextBilling.getTime() - today.getTime();
+    const daysUntilDue = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    
+    return daysUntilDue;
+  };
+
+  // Get billing cycle display text
+  const getBillingCycleText = (cycle) => {
+    switch (cycle) {
+      case 'daily': return 'Daily';
+      case 'weekly': return 'Weekly';
+      case 'monthly': return 'Monthly';
+      case 'yearly': return 'Yearly';
+      default: return 'Monthly';
+    }
+  };
+
+  // Get status display
+  const getStatusDisplay = (status) => {
+    switch (status) {
+      case 'active': return { text: 'Active', color: '#10B981', bgColor: '#D1FAE5' };
+      case 'cancelled': return { text: 'Cancelled', color: '#EF4444', bgColor: '#FEE2E2' };
+      case 'paused': return { text: 'Paused', color: '#F59E0B', bgColor: '#FEF3C7' };
+      default: return { text: 'Active', color: '#10B981', bgColor: '#D1FAE5' };
+    }
+  };
+
+  // Get urgency color based on days until billing
+  const getUrgencyColor = (days) => {
+    if (days < 0) return '#EF4444'; // Red for overdue
+    if (days <= 3) return '#F59E0B'; // Amber for warning
+    return '#10B981'; // Green for safe
+  };
+
+  // Handle mark as paid with payment options
+  const handleMarkAsPaid = () => {
+    if (navigation) {
+      // Navigate to payment options screen with subscription data
+      PaymentService.openPaymentPage(subscription.name, navigation, {
+        subscriptionId: subscription.id,
+        amount: subscription.amount,
+        currency: subscription.currency,
+        billingCycle: subscription.billing_cycle
+      });
+    } else {
+      // Fallback to simple mark as paid
+      Alert.alert(
+        'Mark as Paid',
+        `Mark ${subscription.name} as paid for ${formatCurrency(subscription.amount, subscription.currency)}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Mark Paid', 
+            onPress: async () => {
+              try {
+                await markSubscriptionAsPaid(subscription.id, {
+                  amount: subscription.amount,
+                  method: 'manual'
+                });
+                Alert.alert('Success', 'Payment recorded successfully!');
+                // Refresh the payment history
+                loadPaymentHistory();
+              } catch (error) {
+                Alert.alert('Error', 'Failed to mark as paid. Please try again.');
+              }
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  // Handle skip reminder
+  const handleSkipReminder = () => {
+    Alert.alert(
+      'Skip Reminder',
+      'How long would you like to skip the reminder for?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: '1 Day', 
+          onPress: async () => {
+            try {
+              await skipSubscriptionReminder(subscription.id, '1 day');
+              Alert.alert('Success', 'Reminder skipped for 1 day');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to skip reminder. Please try again.');
+            }
+          }
+        },
+        { 
+          text: '3 Days', 
+          onPress: async () => {
+            try {
+              await skipSubscriptionReminder(subscription.id, '3 days');
+              Alert.alert('Success', 'Reminder skipped for 3 days');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to skip reminder. Please try again.');
+            }
+          }
+        },
+        { 
+          text: '1 Week', 
+          onPress: async () => {
+            try {
+              await skipSubscriptionReminder(subscription.id, '1 week');
+              Alert.alert('Success', 'Reminder skipped for 1 week');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to skip reminder. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle cancel subscription
+  const handleCancelSubscription = () => {
+    Alert.alert(
+      'Cancel Subscription',
+      `Are you sure you want to cancel your ${subscription.name} subscription?`,
+      [
+        { text: 'Keep Subscription', style: 'cancel' },
+        { 
+          text: 'Cancel Subscription', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelSubscription(subscription.id);
+              Alert.alert('Cancelled', 'Subscription has been cancelled');
+              navigation.goBack();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to cancel subscription. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Share subscription details
+  const handleShare = async () => {
+    try {
+      const message = `💳 ${subscription.name} Subscription\n` +
+        `Amount: ${formatCurrency(subscription.amount, subscription.currency)}\n` +
+        `Billing: ${getBillingCycleText(subscription.billing_cycle)}\n` +
+        `Status: ${getStatusDisplay(subscription.status).text}\n` +
+        `Next Payment: ${formatDate(subscription.next_billing_date)}\n` +
+        `Category: ${subscription.category || 'General'}`;
+      
+      await Share.share({
+        message,
+        title: `${subscription.name} Subscription Details`
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  };
+
+  // Handle edit subscription
+  const handleEdit = () => {
+    navigation.navigate('EditSubscription', { 
+      subscription,
+      refreshSubscriptions: () => {} // You can pass a refresh function if needed
+    });
+  };
+
+  // Handle delete subscription
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Subscription',
+      `Are you sure you want to permanently delete your ${subscription.name} subscription? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Implement delete logic here
+              Alert.alert('Deleted', 'Subscription has been deleted');
+              navigation.goBack();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete subscription. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  if (!subscription) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#4B5FFF" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Subscription Details</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color="#6B7280" />
+          <Text style={styles.errorTitle}>No Subscription Data</Text>
+          <Text style={styles.errorText}>
+            The subscription details could not be loaded. Please try again.
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.retryButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const daysUntilBilling = getDaysUntilBilling();
+  const urgencyColor = daysUntilBilling !== null ? getUrgencyColor(daysUntilBilling) : '#6B7280';
+  const statusDisplay = getStatusDisplay(subscription.status);
+  const isOverdue = daysUntilBilling !== null && daysUntilBilling < 0;
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color="#4B5FFF" />
+        </TouchableOpacity>
+        <Text style={styles.title}>Details</Text>
+        <TouchableOpacity 
+          onPress={handleShare}
+          style={styles.shareButton}
+        >
+          <Ionicons name="share-outline" size={24} color="#4B5FFF" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Hero Card */}
+        <LinearGradient
+          colors={['#6D7BFF', '#A46BFF']}
+          style={styles.heroCard}
+          start={[0, 0]}
+          end={[1, 0]}
+        >
+          <View style={styles.heroContent}>
+            <View style={styles.serviceHeader}>
+              {serviceLogo ? (
+                <View style={styles.logoContainer}>
+                  <Image source={serviceLogo} style={styles.logo} />
+                </View>
+              ) : (
+                <View style={[styles.logoContainer, styles.logoPlaceholder]}>
+                  <Ionicons name="business" size={32} color="#fff" />
+                </View>
+              )}
+              <View style={styles.serviceInfo}>
+                <Text style={styles.serviceName}>{subscription.name}</Text>
+                <Text style={styles.serviceCategory}>
+                  {subscription.service_provider || subscription.category || 'Subscription Service'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.amountContainer}>
+              <Text style={styles.amount}>
+                {formatCurrency(subscription.amount, subscription.currency)}
+              </Text>
+              <Text style={styles.billingCycle}>
+                per {getBillingCycleText(subscription.billing_cycle).toLowerCase()}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Status Badge */}
+        <View style={[styles.statusBadge, { backgroundColor: statusDisplay.bgColor }]}>
+          <View style={[styles.statusDot, { backgroundColor: statusDisplay.color }]} />
+          <Text style={[styles.statusText, { color: statusDisplay.color }]}>
+            {statusDisplay.text}
+          </Text>
+          {subscription.is_shared && (
+            <View style={styles.sharedIndicator}>
+              <Ionicons name="people" size={12} color="#4B5FFF" />
+              <Text style={styles.sharedText}>Shared</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Quick Actions */}
+        {subscription.status === 'active' && (
+          <View style={styles.quickActions}>
+            <TouchableOpacity 
+              style={[styles.quickAction, styles.payAction]}
+              onPress={handleMarkAsPaid}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+              <Text style={styles.quickActionText}>Mark Paid</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickAction, styles.skipAction]}
+              onPress={handleSkipReminder}
+            >
+              <Ionicons name="notifications-off" size={20} color="#F59E0B" />
+              <Text style={styles.quickActionText}>Skip Reminder</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickAction, styles.cancelAction]}
+              onPress={handleCancelSubscription}
+            >
+              <Ionicons name="close-circle" size={20} color="#EF4444" />
+              <Text style={styles.quickActionText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Next Billing Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="calendar" size={20} color="#4B5FFF" />
+            <Text style={styles.cardTitle}>Next Billing</Text>
+          </View>
+          
+          <View style={styles.billingInfo}>
+            <Text style={styles.billingDate}>
+              {formatDate(subscription.next_billing_date)}
+            </Text>
+            
+            {daysUntilBilling !== null && subscription.status === 'active' && (
+              <View style={[styles.urgencyBadge, { backgroundColor: urgencyColor }]}>
+                <Ionicons 
+                  name={isOverdue ? "warning" : daysUntilBilling <= 3 ? "alarm" : "time"} 
+                  size={14} 
+                  color="#fff" 
+                />
+                <Text style={styles.urgencyText}>
+                  {isOverdue ? 'Overdue' : 
+                   daysUntilBilling === 0 ? 'Today' : 
+                   daysUntilBilling === 1 ? 'Tomorrow' : 
+                   `${daysUntilBilling} days`}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Last Payment Date */}
+          {subscription.last_payment_date && (
+            <View style={styles.lastPayment}>
+              <Text style={styles.lastPaymentLabel}>Last paid on:</Text>
+              <Text style={styles.lastPaymentDate}>
+                {formatShortDate(subscription.last_payment_date)}
+              </Text>
+            </View>
+          )}
+
+          {/* Reminder Settings */}
+          <View style={styles.reminderSettings}>
+            <Text style={styles.reminderLabel}>Reminder:</Text>
+            <Text style={styles.reminderValue}>
+              {subscription.reminder_days_before || 3} days before due date
+            </Text>
+          </View>
+        </View>
+
+        {/* Subscription Details */}
+        <View style={styles.infoCard}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="information-circle" size={20} color="#4B5FFF" />
+            <Text style={styles.cardTitle}>Subscription Details</Text>
+          </View>
+          
+          <View style={styles.detailsGrid}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Service Provider</Text>
+              <Text style={styles.detailValue}>
+                {subscription.service_provider || subscription.name}
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Billing Cycle</Text>
+              <Text style={styles.detailValue}>
+                {getBillingCycleText(subscription.billing_cycle)}
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Currency</Text>
+              <Text style={styles.detailValue}>
+                {subscription.currency === 'NGN' ? 'Naira (₦)' : 'US Dollar ($)'}
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Auto Renew</Text>
+              <Text style={styles.detailValue}>
+                {subscription.auto_renew ? 'Yes' : 'No'}
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Category</Text>
+              <Text style={styles.detailValue}>
+                {subscription.category || 'General'}
+              </Text>
+            </View>
+            
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Shared Plan</Text>
+              <Text style={styles.detailValue}>
+                {subscription.is_shared ? 'Yes' : 'No'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Payment Statistics */}
+          {(subscription.payment_count > 0 || subscription.total_payments > 0) && (
+            <View style={styles.paymentStats}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Total Payments</Text>
+                <Text style={styles.statValue}>{subscription.payment_count}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Amount Paid</Text>
+                <Text style={styles.statValue}>
+                  {formatCurrency(subscription.total_payments, subscription.currency)}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Notes Section */}
+        {subscription.notes && (
+          <View style={styles.infoCard}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="document-text" size={20} color="#4B5FFF" />
+              <Text style={styles.cardTitle}>Notes</Text>
+            </View>
+            <Text style={styles.notesText}>{subscription.notes}</Text>
+          </View>
+        )}
+
+        {/* Payment History Section */}
+        <View style={styles.infoCard}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="receipt-outline" size={20} color="#4B5FFF" />
+            <Text style={styles.cardTitle}>Payment History</Text>
+          </View>
+          
+          {loadingPayments ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#4B5FFF" />
+              <Text style={styles.loadingText}>Loading payments...</Text>
+            </View>
+          ) : paymentHistory.length > 0 ? (
+            <>
+              <View style={styles.paymentList}>
+                {paymentHistory.slice(0, 5).map((payment, index) => (
+                  <View key={payment.id || index} style={styles.paymentItem}>
+                    <View style={styles.paymentInfo}>
+                      <Text style={styles.paymentAmount}>
+                        {formatCurrency(payment.amount, payment.currency)}
+                      </Text>
+                      <Text style={styles.paymentDate}>
+                        {formatShortDate(payment.paid_at)}
+                      </Text>
+                    </View>
+                    <View style={styles.paymentMethod}>
+                      <Ionicons 
+                        name={PaymentService.getPaymentMethodIcon(payment.payment_method)} 
+                        size={14} 
+                        color="#6B7280" 
+                      />
+                      <Text style={styles.paymentMethodText}>
+                        {PaymentService.getPaymentMethodDisplayName(payment.payment_method)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {paymentHistory.length > 5 && (
+                <TouchableOpacity style={styles.viewAllButton}>
+                  <Text style={styles.viewAllText}>View All Payments</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#4B5FFF" />
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyPayments}>
+              <Ionicons name="receipt-outline" size={48} color="#E5E7EB" />
+              <Text style={styles.emptyPaymentsTitle}>No Payment History</Text>
+              <Text style={styles.emptyPaymentsText}>
+                No payments recorded yet. Mark this subscription as paid to see payment history.
+              </Text>
+              <TouchableOpacity 
+                style={styles.recordPaymentButton}
+                onPress={handleMarkAsPaid}
+              >
+                <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                <Text style={styles.recordPaymentText}>Record First Payment</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Monthly Equivalent */}
+        <View style={styles.infoCard}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="calculator" size={20} color="#4B5FFF" />
+            <Text style={styles.cardTitle}>Monthly Equivalent</Text>
+          </View>
+          
+          <View style={styles.monthlyEquivalent}>
+            <Text style={styles.monthlyAmount}>
+              {(() => {
+                let multiplier = 1;
+                if (subscription.billing_cycle === 'yearly') multiplier = 1/12;
+                if (subscription.billing_cycle === 'weekly') multiplier = 4.33;
+                if (subscription.billing_cycle === 'daily') multiplier = 30;
+                
+                const monthlyAmount = (Number(subscription.amount) || 0) * multiplier;
+                return formatCurrency(monthlyAmount, subscription.currency);
+              })()}
+            </Text>
+            <Text style={styles.monthlyLabel}>
+              Estimated monthly cost
+            </Text>
+          </View>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.editButton]}
+            onPress={handleEdit}
+          >
+            <Ionicons name="create-outline" size={20} color="#4B5FFF" />
+            <Text style={[styles.actionButtonText, styles.editButtonText]}>
+              Edit Subscription
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={handleDelete}
+          >
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+              Delete
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Stats */}
+        <View style={styles.statsCard}>
+          <Text style={styles.statsTitle}>Subscription Insights</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statItem}>
+              <Ionicons name="trending-up" size={24} color="#4B5FFF" />
+              <Text style={styles.statValue}>
+                {formatCurrency(
+                  (Number(subscription.amount) || 0) * 
+                  (subscription.billing_cycle === 'yearly' ? 1 : 
+                   subscription.billing_cycle === 'monthly' ? 12 :
+                   subscription.billing_cycle === 'weekly' ? 52 : 365),
+                  subscription.currency
+                )}
+              </Text>
+              <Text style={styles.statLabel}>Yearly Cost</Text>
+            </View>
+            
+            <View style={styles.statItem}>
+              <Ionicons name="calendar-clear" size={24} color="#10B981" />
+              <Text style={styles.statValue}>
+                {subscription.billing_cycle === 'daily' ? 'Every day' :
+                 subscription.billing_cycle === 'weekly' ? 'Every week' :
+                 subscription.billing_cycle === 'monthly' ? 'Every month' : 'Every year'}
+              </Text>
+              <Text style={styles.statLabel}>Renewal Frequency</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Created/Updated Info */}
+        <View style={styles.metaInfo}>
+          <Text style={styles.metaText}>
+            Created: {formatShortDate(subscription.created_at)}
+          </Text>
+          {subscription.updated_at !== subscription.created_at && (
+            <Text style={styles.metaText}>
+              Updated: {formatShortDate(subscription.updated_at)}
+            </Text>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1F2937',
+  },
+  shareButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  heroCard: {
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroContent: {
+    alignItems: 'center',
+  },
+  serviceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  logoPlaceholder: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  logo: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
+  },
+  serviceInfo: {
+    flex: 1,
+  },
+  serviceName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  serviceCategory: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  amountContainer: {
+    alignItems: 'center',
+  },
+  amount: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  billingCycle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginRight: 8,
+  },
+  sharedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
+  },
+  sharedText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#4B5FFF',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 12,
+  },
+  quickAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 8,
+  },
+  payAction: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#10B981',
+  },
+  skipAction: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F59E0B',
+  },
+  cancelAction: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  quickActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  billingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  billingDate: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+    flex: 1,
+  },
+  urgencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginLeft: 12,
+  },
+  urgencyText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  lastPayment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  lastPaymentLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginRight: 8,
+  },
+  lastPaymentDate: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  reminderSettings: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 12,
+  },
+  reminderLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginRight: 8,
+  },
+  reminderValue: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+  },
+  detailItem: {
+    width: '50%',
+    paddingHorizontal: 8,
+    marginBottom: 16,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailValue: {
+    fontSize: 16,
+    color: '#1F2937',
+    fontWeight: '600',
+  },
+  paymentStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4B5FFF',
+  },
+  notesText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  paymentList: {
+    marginTop: 8,
+  },
+  paymentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  paymentInfo: {
+    flex: 1,
+  },
+  paymentAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  paymentDate: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  paymentMethod: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  paymentMethodText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#4B5FFF',
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  monthlyEquivalent: {
+    alignItems: 'center',
+  },
+  monthlyAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#4B5FFF',
+    marginBottom: 4,
+  },
+  monthlyLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    gap: 8,
+  },
+  editButton: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#4B5FFF',
+  },
+  deleteButton: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  editButtonText: {
+    color: '#4B5FFF',
+  },
+  deleteButtonText: {
+    color: '#EF4444',
+  },
+  statsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 8,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  metaInfo: {
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 4,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  retryButton: {
+    backgroundColor: '#4B5FFF',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 8,
+    color: '#6B7280',
+    fontSize: 14,
+  },
+  emptyPayments: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyPaymentsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  emptyPaymentsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  recordPaymentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4B5FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  recordPaymentText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+});
+
+// suba-frontend/src/features/subscriptions/subscriptionService.js - FIXED PAYMENTS
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../../config/api';
+import LogoService from '../../services/LogoService';
+import { NotificationService } from '../../services/notificationService';
+
+// Enhanced normalizer
+const normalizeSubscription = async (sub) => {
+  const normalized = {
+    id: sub.id,
+    name: sub.name,
+    service_provider: sub.service_provider,
+    amount: sub.amount,
+    category: sub.category,
+    currency: sub.currency || 'NGN',
+    billing_cycle: sub.billing_cycle,
+    next_billing_date: sub.next_billing_date,
+    last_payment_date: sub.last_payment_date,
+    auto_renew: sub.auto_renew !== undefined ? sub.auto_renew : true,
+    status: sub.status || 'active',
+    reminder_days_before: sub.reminder_days_before || 3,
+    is_shared: sub.is_shared || false,
+    notes: sub.notes,
+    cancellation_link: sub.cancellation_link,
+    logo_url: sub.logo_url,
+    skipped_at: sub.skipped_at,
+    next_reminder_date: sub.next_reminder_date,
+    total_payments: sub.total_payments || 0.00,
+    payment_count: sub.payment_count || 0,
+    created_at: sub.created_at,
+    updated_at: sub.updated_at,
+    
+    // Legacy/compatibility fields
+    logo: sub.logo_url || sub.logo,
+    is_active: sub.status !== 'cancelled',
+  };
+
+  // If no logo exists, try to get one from LogoService
+  if (!normalized.logo && !normalized.logo_url) {
+    try {
+      const logo = await LogoService.getLogoForSubscription(sub.name);
+      if (logo) {
+        normalized.logo = logo;
+        normalized.logo_url = typeof logo === 'string' ? logo : logo.uri;
+      }
+    } catch (error) {
+      console.error('Error getting logo for subscription:', error);
+    }
+  }
+
+  return normalized;
+};
+
+// Enhanced get payment history with better error handling
+export const getSubscriptionPayments = async (subscriptionId, options = {}) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const { limit = 20, offset = 0 } = options;
+    
+    const res = await fetch(
+      `${API_URL}/payments/subscriptions/${subscriptionId}/payments?limit=${limit}&offset=${offset}`, 
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!res.ok) {
+      // If 404, return empty array instead of throwing error
+      if (res.status === 404) {
+        console.log('No payment history found for subscription:', subscriptionId);
+        return [];
+      }
+      
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const result = await res.json();
+    return result.payments || [];
+  } catch (error) {
+    console.error("❌ Error fetching subscription payments:", error.message);
+    
+    // Return empty array instead of throwing error for 404s
+    if (error.message.includes('404')) {
+      return [];
+    }
+    
+    throw error;
+  }
+};
+
+// Enhanced mark as paid with better error handling
+export const markSubscriptionAsPaid = async (subscriptionId, paymentData = {}) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    
+    const res = await fetch(`${API_URL}/payments/subscriptions/${subscriptionId}/mark-paid`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        payment_method: paymentData.method || 'manual',
+        payment_date: paymentData.payment_date || new Date().toISOString().split('T')[0],
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+        ...paymentData
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const result = await res.json();
+    return result;
+  } catch (error) {
+    console.error("❌ Error marking subscription as paid:", error.message);
+    throw error;
+  }
+};
+
+// Enhanced skip reminder
+export const skipSubscriptionReminder = async (subscriptionId, skipDuration = '1 day') => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    
+    const res = await fetch(`${API_URL}/payments/subscriptions/${subscriptionId}/skip`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        skip_duration: skipDuration
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const result = await res.json();
+    return result;
+  } catch (error) {
+    console.error("❌ Error skipping subscription reminder:", error.message);
+    throw error;
+  }
+};
+
+// Rest of the functions remain the same...
+export const getSubscriptions = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const res = await fetch(`${API_URL}/subscriptions`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const data = await res.json();
+    
+    // Normalize all subscriptions with new schema
+    const normalizedSubscriptions = await Promise.all(
+      data.map(sub => normalizeSubscription(sub))
+    );
+    
+    return normalizedSubscriptions;
+  } catch (error) {
+    console.error("❌ Error fetching subscriptions:", error.message);
+    
+    if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+      throw new Error('Unable to connect to the server. Please check your internet connection.');
+    }
+    
+    if (error.message.includes('401') || error.message.includes('token')) {
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    throw new Error('Failed to load subscriptions. Please try again.');
+  }
+};
+
+export const addSubscription = async (subscription) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+
+    const enhancedSubscription = {
+      name: subscription.name,
+      service_provider: subscription.service_provider || subscription.name,
+      category: subscription.category || LogoService.getCategoryForSubscription(subscription.name),
+      amount: subscription.amount,
+      currency: subscription.currency || 'NGN',
+      billing_cycle: subscription.billing_cycle,
+      next_billing_date: subscription.next_billing_date,
+      auto_renew: subscription.auto_renew !== undefined ? subscription.auto_renew : true,
+      reminder_days_before: subscription.reminder_days_before || 3,
+      is_shared: subscription.is_shared || false,
+      notes: subscription.notes || '',
+      cancellation_link: subscription.cancellation_link || '',
+      logo_url: subscription.logo_url || '',
+      status: 'active'
+    };
+
+    const res = await fetch(`${API_URL}/subscriptions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(enhancedSubscription),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const newSub = await res.json();
+    const normalizedSub = await normalizeSubscription(newSub);
+    
+    await NotificationService.schedulePaymentReminder(normalizedSub);
+    
+    return normalizedSub;
+  } catch (error) {
+    console.error("❌ Error adding subscription:", error.message);
+    throw error;
+  }
+};
+
+export const updateSubscription = async (id, updates) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+
+    const dbUpdates = {
+      name: updates.name,
+      service_provider: updates.service_provider,
+      category: updates.category,
+      amount: updates.amount,
+      currency: updates.currency,
+      billing_cycle: updates.billing_cycle,
+      next_billing_date: updates.next_billing_date,
+      last_payment_date: updates.last_payment_date,
+      auto_renew: updates.auto_renew,
+      reminder_days_before: updates.reminder_days_before,
+      is_shared: updates.is_shared,
+      notes: updates.notes,
+      cancellation_link: updates.cancellation_link,
+      logo_url: updates.logo_url,
+      status: updates.status,
+      skipped_at: updates.skipped_at,
+      next_reminder_date: updates.next_reminder_date
+    };
+
+    // Remove undefined fields
+    Object.keys(dbUpdates).forEach(key => {
+      if (dbUpdates[key] === undefined) {
+        delete dbUpdates[key];
+      }
+    });
+
+    const res = await fetch(`${API_URL}/subscriptions/${id}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(dbUpdates),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const updated = await res.json();
+    const normalizedSub = await normalizeSubscription(updated);
+    
+    await NotificationService.schedulePaymentReminder(normalizedSub);
+    
+    return normalizedSub;
+  } catch (error) {
+    console.error("❌ Error updating subscription:", error.message);
+    throw error;
+  }
+};
+
+export const cancelSubscription = async (subscriptionId, cancellationData = {}) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    
+    const res = await fetch(`${API_URL}/subscriptions/${subscriptionId}/cancel`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status: 'cancelled',
+        notes: cancellationData.notes || `Cancelled on ${new Date().toLocaleDateString()}`,
+        ...cancellationData
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const result = await res.json();
+    return result;
+  } catch (error) {
+    console.error("❌ Error cancelling subscription:", error.message);
+    throw error;
+  }
+};
+
+export const deleteSubscription = async (id) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+
+    const res = await fetch(`${API_URL}/subscriptions/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (error) {
+    console.error("❌ Error deleting subscription:", error.message);
+    throw error;
+  }
+};
+
+export const getSubscriptionById = async (id) => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const res = await fetch(`${API_URL}/subscriptions/${id}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return normalizeSubscription(data);
+  } catch (error) {
+    console.error("❌ Error fetching subscription:", error.message);
+    throw error;
+  }
+};
+
+export const getSubscriptionStats = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    const res = await fetch(`${API_URL}/payments/users/current/stats`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("❌ Error fetching subscription stats:", error.message);
+    throw error;
+  }
+};
+
+// suba-frontend/src/services/paymentService.js - UPDATED
+import api from '../api/config';
+
+// Enhanced service payment URL mappings
+const SERVICE_PAYMENT_URLS = {
+  // Streaming Services
+  'netflix': 'https://www.netflix.com/YourAccount',
+  'spotify': 'https://www.spotify.com/account/subscription/',
+  'youtube premium': 'https://www.youtube.com/paid_memberships',
+  'apple music': 'https://apps.apple.com/account/subscriptions',
+  'amazon prime': 'https://www.amazon.com/gp/primecentral',
+  'hulu': 'https://www.hulu.com/account',
+  'disney+': 'https://www.disneyplus.com/account',
+  'showmax': 'https://www.showmax.com/account',
+  
+  // Nigerian Services
+  'dstv': 'https://my.dstv.com/',
+  'gotv': 'https://my.dstv.com/',
+  'startimes': 'https://www.startimes.com/ng/',
+  'mtn': 'https://www.mtn.ng/',
+  'airtel': 'https://www.airtel.ng/',
+  'glo': 'https://www.gloworld.com/ng/',
+  '9mobile': 'https://www.9mobile.com.ng/',
+  
+  // Software & Productivity
+  'microsoft 365': 'https://account.microsoft.com/services/',
+  'adobe creative cloud': 'https://account.adobe.com/plans',
+  'notion': 'https://www.notion.so/pricing',
+  'figma': 'https://www.figma.com/pricing/',
+  'slack': 'https://slack.com/pricing',
+  'zoom': 'https://zoom.us/pricing',
+  
+  // Cloud Services
+  'google one': 'https://one.google.com/about',
+  'dropbox': 'https://www.dropbox.com/account/billing',
+  'icloud': 'https://www.icloud.com/settings/',
+  
+  // Food & Delivery
+  'bolt food': 'https://bolt.eu/en/ng/',
+  'uber eats': 'https://www.ubereats.com/',
+  'jiji': 'https://jiji.ng/',
+};
+
+// Enhanced alternative payment methods
+const ALTERNATIVE_PAYMENT_METHODS = {
+  'mtn': ['USSD: *556#', 'MyMTN App', 'MTN Website', 'Bank Transfer'],
+  'airtel': ['USSD: *123#', 'Airtel Money App', 'Airtel Website', 'Bank Transfer'],
+  'glo': ['USSD: *123#', 'Glo Website', 'Bank App', 'Quickteller'],
+  '9mobile': ['USSD: *242#', '9mobile Website', 'Bank Transfer', 'Quickteller'],
+  'dstv': ['MyDStv App', 'DStv Website', 'Bank USSD', 'Quickteller'],
+  'gotv': ['MyDStv App', 'DStv Website', 'Bank USSD', 'Quickteller'],
+  'startimes': ['USSD: *818#', 'Startimes App', 'Bank Transfer'],
+};
+
+// Payment validation utility
+const validatePaymentData = (paymentData) => {
+  const errors = [];
+  
+  if (!paymentData.amount || paymentData.amount <= 0) {
+    errors.push('Invalid payment amount');
+  }
+  
+  if (!paymentData.method) {
+    errors.push('Payment method is required');
+  }
+  
+  if (paymentData.amount > 1000000) { // Reasonable upper limit
+    errors.push('Payment amount seems too high');
+  }
+  
+  return errors;
+};
+
+// String similarity for better service matching
+const calculateSimilarity = (str1, str2) => {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  return (longer.length - editDistance(longer, shorter)) / parseFloat(longer.length);
+};
+
+const editDistance = (str1, str2) => {
+  const matrix = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+};
+
+export class PaymentService {
+  // Enhanced payment URL lookup with fuzzy matching
+  static getPaymentUrl(serviceName) {
+    if (!serviceName) return null;
+    
+    const serviceKey = serviceName.toLowerCase().trim();
+    
+    // Exact match
+    if (SERVICE_PAYMENT_URLS[serviceKey]) {
+      return SERVICE_PAYMENT_URLS[serviceKey];
+    }
+    
+    // Partial match with similarity scoring
+    let bestMatch = { url: null, score: 0 };
+    
+    for (const [key, url] of Object.entries(SERVICE_PAYMENT_URLS)) {
+      const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalizedService = serviceKey.replace(/[^a-z0-9]/g, '');
+      
+      let score = 0;
+      
+      // Direct inclusion
+      if (normalizedService.includes(normalizedKey) || normalizedKey.includes(normalizedService)) {
+        score = 0.9;
+      } else {
+        // Similarity calculation
+        score = calculateSimilarity(normalizedService, normalizedKey);
+      }
+      
+      if (score > bestMatch.score && score > 0.6) {
+        bestMatch = { url, score };
+      }
+    }
+    
+    return bestMatch.url;
+  }
+
+  // Get alternative payment methods with enhanced matching
+  static getAlternativePaymentMethods(serviceName) {
+    if (!serviceName) return [];
+    
+    const serviceKey = serviceName.toLowerCase().trim();
+    
+    // Exact match
+    if (ALTERNATIVE_PAYMENT_METHODS[serviceKey]) {
+      return ALTERNATIVE_PAYMENT_METHODS[serviceKey];
+    }
+    
+    // Partial match with similarity
+    let bestMethods = [];
+    let bestScore = 0;
+    
+    for (const [key, methods] of Object.entries(ALTERNATIVE_PAYMENT_METHODS)) {
+      const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalizedService = serviceKey.replace(/[^a-z0-9]/g, '');
+      
+      let score = calculateSimilarity(normalizedService, normalizedKey);
+      
+      if (score > bestScore && score > 0.6) {
+        bestScore = score;
+        bestMethods = methods;
+      }
+    }     return bestMethods;
+  }
+
+  // Enhanced payment info check
+  static hasPaymentInfo(serviceName) {
+    const hasUrl = this.getPaymentUrl(serviceName) !== null;
+    const hasMethods = this.getAlternativePaymentMethods(serviceName).length > 0;
+    
+    return hasUrl || hasMethods;
+  }
+
+  // Get payment confidence score (0-1)
+  static getPaymentConfidence(serviceName) {
+    const url = this.getPaymentUrl(serviceName);
+    const methods = this.getAlternativePaymentMethods(serviceName);
+    
+    let score = 0;
+    
+    if (url) score += 0.6;
+    if (methods.length > 0) score += 0.4;
+    
+    // Bonus for multiple methods
+    if (methods.length > 2) score += 0.1;
+    
+    return Math.min(score, 1.0);
+  }
+
+  // Enhanced payment page navigation
+  static async openPaymentPage(serviceName, navigation, subscriptionData = {}) {
+    const paymentUrl = this.getPaymentUrl(serviceName);
+    const alternativeMethods = this.getAlternativePaymentMethods(serviceName);
+    const confidence = this.getPaymentConfidence(serviceName);
+    
+    const params = {
+      serviceName,
+      paymentUrl,
+      alternativeMethods,
+      confidenceScore: confidence,
+      ...subscriptionData
+    };
+    
+    if (paymentUrl || alternativeMethods.length > 0) {
+      navigation.navigate('PaymentOptions', params);
+    } else {
+      navigation.navigate('PaymentHelp', params);
+    }
+  }
+
+  // Enhanced mark subscription as paid with validation
+  static async markAsPaid(subscriptionId, paymentData = {}) {
+    try {
+      // Validate payment data
+      const validationErrors = validatePaymentData(paymentData);
+      if (validationErrors.length > 0) {
+        return {
+          success: false,
+          error: validationErrors.join(', '),
+          validationErrors: validationErrors
+        };
+      }
+
+      const payload = {
+        payment_method: paymentData.method || 'manual',
+        payment_date: paymentData.payment_date || new Date().toISOString().split('T')[0],
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+        transaction_id: paymentData.transactionId,
+        receipt_url: paymentData.receiptUrl,
+        ...paymentData
+      };
+
+      const response = await api.put(`/payments/subscriptions/${subscriptionId}/mark-paid`, payload);
+
+      // Log successful payment for analytics
+      console.log(`Payment successfully recorded for subscription ${subscriptionId}`, {
+        method: paymentData.method,
+        amount: paymentData.amount,
+        transactionId: paymentData.transactionId
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Payment recorded successfully'
+      };
+    } catch (error) {
+      console.error('Error marking payment as paid:', error);
+      
+      // Enhanced error handling with specific messages
+      let errorMessage = 'Failed to update payment status';
+      let errorCode = 'UNKNOWN_ERROR';
+      
+      if (error.response) {
+        const serverError = error.response.data;
+        errorMessage = serverError.error || serverError.message || `Server error: ${error.response.status}`;
+        errorCode = serverError.code || `HTTP_${error.response.status}`;
+        
+        // Handle specific error cases
+        if (error.response.status === 409) {
+          errorMessage = 'A payment was already recorded recently. Please wait before recording another payment.';
+          errorCode = 'DUPLICATE_PAYMENT';
+        } else if (error.response.status === 404) {
+          errorMessage = 'Subscription not found. Please refresh and try again.';
+          errorCode = 'SUBSCRIPTION_NOT_FOUND';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error: Could not connect to server. Please check your internet connection.';
+        errorCode = 'NETWORK_ERROR';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+        errorCode: errorCode,
+        details: error.response?.data?.details
+      };
+    }
+  }
+
+  // Enhanced skip reminder with duration options
+  static async skipReminder(subscriptionId, skipDuration = '1 day') {
+    try {
+      const response = await api.put(`/payments/subscriptions/${subscriptionId}/skip`, {
+        skip_duration: skipDuration
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.data.message || 'Reminder skipped successfully'
+      };
+    } catch (error) {
+      console.error('Error skipping reminder:', error);
+      
+      let errorMessage = 'Failed to skip reminder';
+      
+      if (error.response) {
+        errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        errorMessage = 'Network error: Could not connect to server';
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+
+  // Get payment history for a subscription
+  static async getPaymentHistory(subscriptionId, options = {}) {
+    try {
+      const { limit = 20, offset = 0 } = options;
+      
+      const response = await api.get(`/payments/subscriptions/${subscriptionId}/payments`, {
+        params: { limit, offset }
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        payments: response.data.payments,
+        pagination: response.data.pagination
+      };
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      
+      let errorMessage = 'Failed to fetch payment history';
+      
+      if (error.response) {
+        errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+
+  // Get user payment statistics
+  static async getUserPaymentStats(userId) {
+    try {
+      const response = await api.get(`/payments/users/${userId}/payment-stats`);
+
+      return {
+        success: true,
+        data: response.data,
+        stats: response.data.stats,
+        recentPayments: response.data.recent_payments
+      };
+    } catch (error) {
+      console.error('Error fetching payment stats:', error);
+      
+      let errorMessage = 'Failed to fetch payment statistics';
+      
+      if (error.response) {
+        errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+  }
+
+  // Generate payment receipt data
+  static generateReceiptData(paymentRecord, subscription) {
+    return {
+      receiptId: `RCPT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      date: new Date().toISOString(),
+      subscriptionName: subscription?.name,
+      amount: paymentRecord.amount,
+      currency: paymentRecord.currency,
+      paymentMethod: paymentRecord.payment_method,
+      transactionId: paymentRecord.transaction_id,
+      nextBillingDate: subscription?.next_billing_date
+    };
+  }
+
+  // Validate payment method
+  static validatePaymentMethod(method) {
+    const validMethods = [
+      'manual', 'website', 'ussd', 'bank_transfer', 
+      'mobile_app', 'card', 'bank_ussd', 'quickteller'
+    ];
+    
+    return validMethods.includes(method.toLowerCase());
+  }
+
+  // Get payment method display name
+  static getPaymentMethodDisplayName(method) {
+    const displayNames = {
+      'manual': 'Manual Entry',
+      'website': 'Official Website',
+      'ussd': 'USSD Code',
+      'bank_transfer': 'Bank Transfer',
+      'mobile_app': 'Mobile App',
+      'card': 'Card Payment',
+      'bank_ussd': 'Bank USSD',
+      'quickteller': 'Quickteller'
+    };
+    
+    return displayNames[method.toLowerCase()] || method;
+  }
+
+  // Get payment method icon
+  static getPaymentMethodIcon(method) {
+    const icons = {
+      'manual': 'checkmark-circle',
+      'website': 'globe',
+      'ussd': 'phone-portrait',
+      'bank_transfer': 'business',
+      'mobile_app': 'phone-portrait',
+      'card': 'card',
+      'bank_ussd': 'phone-portrait',
+      'quickteller': 'flash'
+    };
+    
+    return icons[method.toLowerCase()] || 'help-circle';
+  }
+
+  // Check if service supports specific payment method
+  static supportsPaymentMethod(serviceName, method) {
+    const serviceKey = serviceName.toLowerCase().trim();
+    const alternativeMethods = this.getAlternativePaymentMethods(serviceName);
+    
+    const methodMap = {
+      'ussd': ['USSD:', '*556#', '*123#', '*242#', '*818#'],
+      'mobile_app': ['App', 'Mobile App'],
+      'website': ['Website'],
+      'bank_transfer': ['Bank Transfer', 'Bank App'],
+      'bank_ussd': ['Bank USSD'],
+      'quickteller': ['Quickteller']
+    };
+    
+    const methodKeywords = methodMap[method] || [];
+    
+    return alternativeMethods.some(altMethod => 
+      methodKeywords.some(keyword => 
+        altMethod.toLowerCase().includes(keyword.toLowerCase())
+      )
+    );
+  }
+}
+
+// Export utility functions for testing
+export const PaymentUtils = {
+  calculateSimilarity,
+  editDistance,
+  validatePaymentData
+};
+
+export default PaymentService;
+
+// suba-backend/routes/paymentsRoutes.js - UPDATED
+import express from 'express';
+import { dbPromise } from '../models/db.js';
+
+const router = express.Router();
+
+// Enhanced billing date calculation
+function calculateNextBillingDate(billingCycle, currentDate = new Date()) {
+  const date = new Date(currentDate);
+  
+  // Normalize to start of day
+  date.setHours(0, 0, 0, 0);
+  
+  switch (billingCycle.toLowerCase()) {
+    case 'daily':
+      date.setDate(date.getDate() + 1);
+      break;
+    case 'weekly':
+      date.setDate(date.getDate() + 7);
+      break;
+    case 'monthly':
+      date.setMonth(date.getMonth() + 1);
+      break;
+    case 'yearly':
+      date.setFullYear(date.getFullYear() + 1);
+      break;
+    case 'quarterly':
+      date.setMonth(date.getMonth() + 3);
+      break;
+    default:
+      date.setMonth(date.getMonth() + 1);
+  }
+  
+  return date.toISOString().split('T')[0];
+}
+
+// Mark subscription as paid
+// suba-backend/routes/paymentsRoutes.js - FIXED VERSION
+router.put('/subscriptions/:id/mark-paid', async (req, res) => {
+  const connection = await dbPromise.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { id } = req.params;
+    const { 
+      payment_method = 'manual', // This comes from frontend
+      method = payment_method,   // Map to database field
+      payment_date,
+      amount,
+      currency,
+      transaction_id,
+      receipt_url 
+    } = req.body;
+
+    // Get subscription
+    const [subscription] = await connection.execute(
+      'SELECT * FROM subscriptions WHERE id = ?',
+      [id]
+    );
+
+    if (subscription.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ 
+        success: false,
+        error: 'Subscription not found' 
+      });
+    }
+
+    const sub = subscription[0];
+    const paymentDate = payment_date || new Date().toISOString().split('T')[0];
+    const nextBillingDate = calculateNextBillingDate(sub.billing_cycle, new Date(paymentDate));
+
+    // Update subscription
+    await connection.execute(
+      `UPDATE subscriptions 
+       SET last_payment_date = ?, 
+           next_billing_date = ?,
+           status = 'active',
+           skipped_at = NULL,
+           total_payments = COALESCE(total_payments, 0) + ?,
+           payment_count = COALESCE(payment_count, 0) + 1,
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [
+        paymentDate,
+        nextBillingDate,
+        amount || sub.amount,
+        id
+      ]
+    );
+
+    // Create payment record - USE 'method' NOT 'payment_method'
+    await connection.execute(
+      `INSERT INTO payments 
+       (user_id, subscription_id, amount, currency, payment_method, 
+        payment_gateway, transaction_id, receipt_url, status, paid_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'successful', NOW())`,
+      [
+        sub.user_id,
+        id,
+        amount || sub.amount,
+        currency || sub.currency,
+        method, // Use the mapped field
+        method === 'manual' ? 'manual' : 'external_gateway',
+        transaction_id || `manual_${Date.now()}`,
+        receipt_url,
+        'successful'
+      ]
+    );
+
+    // Get updated subscription
+    const [updatedSub] = await connection.execute(
+      'SELECT * FROM subscriptions WHERE id = ?',
+      [id]
+    );
+
+    await connection.commit();
+
+    res.json({ 
+      success: true, 
+      message: 'Payment successfully recorded',
+      subscription: updatedSub[0]
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error marking payment as paid:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to process payment'
+    });
+  } finally {
+    connection.release();
+  }
+});
+
+// Skip reminder
+router.put('/subscriptions/:id/skip', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { skip_duration = '1 day' } = req.body;
+
+    // Calculate next reminder date
+    const nextReminderDate = new Date();
+    switch (skip_duration) {
+      case '1 day':
+        nextReminderDate.setDate(nextReminderDate.getDate() + 1);
+        break;
+      case '3 days':
+        nextReminderDate.setDate(nextReminderDate.getDate() + 3);
+        break;
+      case '1 week':
+        nextReminderDate.setDate(nextReminderDate.getDate() + 7);
+        break;
+      default:
+        nextReminderDate.setDate(nextReminderDate.getDate() + 1);
+    }
+
+    await dbPromise.execute(
+      `UPDATE subscriptions 
+       SET skipped_at = NOW(),
+           next_reminder_date = ?,
+           skip_count = COALESCE(skip_count, 0) + 1,
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [
+        nextReminderDate.toISOString().split('T')[0],
+        id
+      ]
+    );
+
+    const [updatedSub] = await dbPromise.execute(
+      'SELECT * FROM subscriptions WHERE id = ?',
+      [id]
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Reminder skipped until ${nextReminderDate.toLocaleDateString()}`,
+      subscription: updatedSub[0]
+    });
+  } catch (error) {
+    console.error('Error skipping reminder:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to skip reminder'
+    });
+  }
+});
+
+// Get payment history for a subscription - FIXED ENDPOINT
+router.get('/subscriptions/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 20, offset = 0 } = req.query;
+
+    // Verify subscription exists and belongs to user
+    const [subscription] = await dbPromise.execute(
+      'SELECT id, user_id FROM subscriptions WHERE id = ?',
+      [id]
+    );
+
+    if (subscription.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'Subscription not found' 
+      });
+    }
+
+    const [payments] = await dbPromise.execute(
+      `SELECT p.*, s.name as subscription_name, s.logo_url
+       FROM payments p
+       LEFT JOIN subscriptions s ON p.subscription_id = s.id
+       WHERE p.subscription_id = ?
+       ORDER BY p.paid_at DESC
+       LIMIT ? OFFSET ?`,
+      [id, parseInt(limit), parseInt(offset)]
+    );
+
+    const [totalCount] = await dbPromise.execute(
+      `SELECT COUNT(*) as total 
+       FROM payments 
+       WHERE subscription_id = ?`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      payments: payments,
+      pagination: {
+        total: totalCount[0].total,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching payment history:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch payment history' 
+    });
+  }
+});
+
+// Get user payment statistics
+router.get('/users/:userId/payment-stats', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const [stats] = await dbPromise.execute(
+      `SELECT 
+        COUNT(DISTINCT subscription_id) as total_subscriptions,
+        COUNT(*) as total_payments,
+        COALESCE(SUM(amount), 0) as total_amount_paid,
+        AVG(amount) as average_payment,
+        MIN(paid_at) as first_payment_date,
+        MAX(paid_at) as last_payment_date
+       FROM payments 
+       WHERE user_id = ? AND status = 'successful'`,
+      [userId]
+    );
+
+    const [recentPayments] = await dbPromise.execute(
+      `SELECT p.*, s.name as subscription_name
+       FROM payments p
+       LEFT JOIN subscriptions s ON p.subscription_id = s.id
+       WHERE p.user_id = ? AND p.status = 'successful'
+       ORDER BY p.paid_at DESC
+       LIMIT 5`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      stats: stats[0],
+      recent_payments: recentPayments
+    });
+  } catch (error) {
+    console.error('Error fetching payment stats:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch payment statistics' 
+    });
+  }
+});
+
+// Get current user's payment stats
+router.get('/users/current/stats', async (req, res) => {
+  try {
+    // This would typically get user ID from auth middleware
+    // For now, we'll use a placeholder
+    const userId = req.user?.id || 1; // Replace with actual user ID from auth
+
+    const [stats] = await dbPromise.execute(
+      `SELECT 
+        COUNT(DISTINCT s.id) as total_subscriptions,
+        COUNT(p.id) as total_payments,
+        COALESCE(SUM(p.amount), 0) as total_amount_paid,
+        AVG(p.amount) as average_payment
+       FROM subscriptions s
+       LEFT JOIN payments p ON s.id = p.subscription_id AND p.status = 'successful'
+       WHERE s.user_id = ? AND s.status = 'active'`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      stats: stats[0]
+    });
+  } catch (error) {
+    console.error('Error fetching current user stats:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch statistics' 
+    });
+  }
+});
+
+export default router;
+
+// suba-backend/models/db.js
+import mysql from 'mysql2';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Use connection pooling instead of a single connection
+export const db = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  acquireTimeout: 60000, // 60 seconds
+  timeout: 60000, // 60 seconds
+});
+
+// Create promise-based version
+export const dbPromise = db.promise();
+
+// Test the connection
+db.getConnection((err, connection) => {
+  if (err) {
+    console.error('MySQL connection failed:', err.message);
+  } else {
+    console.log('✅ Connected to MySQL database');
+    connection.release(); // Release the connection back to the pool
+  }
+});
+
+// Add error handling for the pool
+db.on('error', (err) => {
+  console.error('Database pool error:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+    console.log('Database connection was closed.');
+  } else if (err.code === 'ER_CON_COUNT_ERROR') {
+    console.log('Database has too many connections.');
+  } else if (err.code === 'ECONNREFUSED') {
+    console.log('Database connection was refused.');
+  }
+});
+
+// suba-backend/index.js - UPDATE THIS FILE
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import authRoutes from './routes/authRoutes.js';
+import subscriptionRoutes from './routes/subscriptions.js';
+import userRoutes from './routes/userRoutes.js';
+import healthRoutes from './routes/healthRoutes.js';
+import analyticsRoutes from './routes/analytics.js';
+import sharedPlansRoutes from './routes/sharedPlans.js';
+import paymentRoutes from './routes/paymentsRoutes.js'; // ← ADD THIS LINE
+
+dotenv.config();
+
+const app = express();
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(cors());
+app.use(express.json());
+
+// Serve static files (for avatars)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Routes
+app.use('/api/shared-plans', sharedPlansRoutes);
+app.use('/api/payments', paymentRoutes); // ← ADD THIS LINE
+app.use('/api/user', userRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/health', healthRoutes);
+
+// Test route for payments
+app.get('/api/payments/test', (req, res) => {
+  res.json({ message: 'Payments endpoint is working!' });
+});
+
+app.get('/', (req, res) => {
+  res.send('✅ API is running...');
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log('📦 Routes loaded:');
+  console.log('   - /api/auth');
+  console.log('   - /api/subscriptions'); 
+  console.log('   - /api/user');
+  console.log('   - /api/analytics');
+  console.log('   - /api/health');
+  console.log('   - /api/shared-plans');
+  console.log('   - /api/payments'); // ← ADD THIS LINE
+  console.log('   - /api/payments/test (test endpoint)');
+});
+
+this is my db schema
+CREATE TABLE `ai_insights` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `type` enum('cost_saving_tip','overlap_detected','alert','suggestion') NOT NULL,
+  `message` text DEFAULT NULL,
+  `affected_services` text DEFAULT NULL,
+  `confidence_score` decimal(3,2) DEFAULT NULL,
+  `resolved` tinyint(1) DEFAULT 0,
+  `generated_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `budget_reports`
+--
+
+CREATE TABLE `budget_reports` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `report_month` varchar(7) DEFAULT NULL,
+  `total_spent` decimal(10,2) DEFAULT NULL,
+  `recurring_services` int(11) DEFAULT NULL,
+  `new_subscriptions` int(11) DEFAULT NULL,
+  `canceled_subscriptions` int(11) DEFAULT NULL,
+  `most_expensive_service` varchar(100) DEFAULT NULL,
+  `category_breakdown` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`category_breakdown`)),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notifications`
+--
+
+CREATE TABLE `notifications` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `type` enum('reminder','insight','invite','warning') NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `message` text DEFAULT NULL,
+  `seen` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `payments`
+--
+
+CREATE TABLE `payments` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `subscription_id` int(11) DEFAULT NULL,
+  `plan` varchar(50) DEFAULT NULL,
+  `amount` decimal(10,2) DEFAULT NULL,
+  `currency` varchar(10) DEFAULT 'NGN',
+  `method` varchar(50) DEFAULT NULL,
+  `payment_method` varchar(50) DEFAULT NULL,
+  `status` enum('pending','successful','failed') DEFAULT 'pending',
+  `paid_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `receipt_url` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `shared_plans`
+--
+
+CREATE TABLE `shared_plans` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `plan_name` varchar(255) NOT NULL,
+  `total_amount` decimal(10,2) NOT NULL,
+  `split_type` enum('equal','custom') NOT NULL DEFAULT 'equal',
+  `max_participants` int(11) DEFAULT 2,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `shared_plan_participants`
+--
+
+CREATE TABLE `shared_plan_participants` (
+  `id` int(11) NOT NULL,
+  `plan_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `split_amount` decimal(10,2) DEFAULT NULL,
+  `status` enum('invited','accepted','declined','removed') DEFAULT 'invited',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `subscriptions`
+--
+
+CREATE TABLE `subscriptions` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `service_provider` varchar(100) DEFAULT NULL,
+  `category` varchar(50) DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `currency` varchar(10) DEFAULT 'NGN',
+  `billing_cycle` enum('daily','weekly','monthly','yearly') NOT NULL,
+  `next_billing_date` date NOT NULL,
+  `last_payment_date` date DEFAULT NULL,
+  `auto_renew` tinyint(1) DEFAULT 1,
+  `status` enum('active','cancelled','paused') DEFAULT 'active',
+  `skipped_at` datetime DEFAULT NULL,
+  `next_reminder_date` date DEFAULT NULL,
+  `total_payments` decimal(10,2) DEFAULT 0.00,
+  `payment_count` int(11) DEFAULT 0,
+  `reminder_days_before` int(11) DEFAULT 3,
+  `is_shared` tinyint(1) DEFAULT 0,
+  `notes` text DEFAULT NULL,
+  `cancellation_link` text DEFAULT NULL,
+  `logo_url` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users`
+--
+
+CREATE TABLE `users` (
+  `id` int(11) NOT NULL,
+  `full_name` varchar(100) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password_hash` varchar(255) NOT NULL,
+  `phone_number` varchar(20) DEFAULT NULL,
+  `country` varchar(100) DEFAULT NULL,
+  `avatar_url` text DEFAULT NULL,
+  `prefers_dark_mode` tinyint(1) DEFAULT 0,
+  `default_currency` varchar(10) DEFAULT 'NGN',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
