@@ -1,3 +1,8 @@
+npx expo install --fix
+npx eas-cli build -p android --profile apk --non-interactive
+
+
+
 i am still getting the error, here are some of my project files to help you figure out where the error is coming from.
 
 // suba-frontend/src/features/profile/ProfileScreen.js

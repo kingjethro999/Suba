@@ -3,10 +3,9 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 
 // Check if running in Expo Go (which has limitations)
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo = false; // Hardcoded to false for production builds
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -56,11 +55,11 @@ export class NotificationService {
 
       const reminderDays = await AsyncStorage.getItem('settings_reminder_days') || 3;
       const daysBefore = parseInt(reminderDays);
-      
+
       const nextBillingDate = new Date(subscription.next_billing_date);
       const reminderDate = new Date(nextBillingDate);
       reminderDate.setDate(reminderDate.getDate() - daysBefore);
-      
+
       // Don't schedule if reminder date is in the past
       if (reminderDate <= new Date()) {
         console.log('Reminder date is in the past, skipping notification');
@@ -100,14 +99,14 @@ export class NotificationService {
     try {
       // Cancel all existing notifications
       await Notifications.cancelAllScheduledNotificationsAsync();
-      
+
       // Schedule new notifications for active subscriptions
       const activeSubscriptions = subscriptions.filter(sub => sub.is_active !== false);
-      
+
       for (const subscription of activeSubscriptions) {
         await this.schedulePaymentReminder(subscription);
       }
-      
+
       console.log(`Scheduled ${activeSubscriptions.length} payment reminders`);
     } catch (error) {
       console.error('Error scheduling all reminders:', error);

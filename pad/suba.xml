@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XML_DIZ_INFO>
+  <MASTER_PAD_VERSION_INFO>
+    <MASTER_PAD_VERSION>4.0</MASTER_PAD_VERSION>
+    <MASTER_PAD_EDITOR>Custom</MASTER_PAD_EDITOR>
+    <MASTER_PAD_INFO>Portable Application Description for Suba</MASTER_PAD_INFO>
+  </MASTER_PAD_VERSION_INFO>
+
+  <Company_Info>
+    <Company_Name>THE BEST STUDIOS</Company_Name>
+    <Address_1></Address_1>
+    <City_Town></City_Town>
+    <State_Province></State_Province>
+    <Zip_Postal_Code></Zip_Postal_Code>
+    <Country>Nigeria</Country>
+    <Company_WebSite_URL>https://github.com/kingjethro999</Company_WebSite_URL>
+    <Contact_First_Name>King</Contact_First_Name>
+    <Contact_Last_Name>Jethro</Contact_Last_Name>
+    <Contact_Email>jethrojerrybj@gmail.com</Contact_Email>
+    <Support_Email>jethrojerrybj@gmail.com</Support_Email>
+    <General_Email>jethrojerrybj@gmail.com</General_Email>
+    <Sales_Email>jethrojerrybj@gmail.com</Sales_Email>
+  </Company_Info>
+
+  <Program_Info>
+    <Program_Name>Suba</Program_Name>
+    <Program_Version>1.0.1</Program_Version>
+    <Program_Release_Month>03</Program_Release_Month>
+    <Program_Release_Day>04</Program_Release_Day>
+    <Program_Release_Year>2026</Program_Release_Year>
+    <Program_Cost_Dollars>0</Program_Cost_Dollars>
+    <Program_Cost_Other_Code></Program_Cost_Other_Code>
+    <Program_Cost_Other></Program_Cost_Other>
+    <Program_Type>Freeware</Program_Type>
+    <Program_Release_Status>New Release</Program_Release_Status>
+    <Program_Install_Support>Install and Uninstall</Program_Install_Support>
+    <Program_OS_Support>Android</Program_OS_Support>
+    <Program_Language>English</Program_Language>
+    <Program_Change_Info>Initial release</Program_Change_Info>
+    <Program_Specific_Category>Finance</Program_Specific_Category>
+    <Program_Category_Class>Business::Personal Finance</Program_Category_Class>
+    <Program_System_Requirements>Android 7.0 or higher</Program_System_Requirements>
+    <File_Info>
+      <File_Size_Bytes>77210003</File_Size_Bytes>
+      <File_Size_K>75400</File_Size_K>
+      <File_Size_MB>73.63</File_Size_MB>
+    </File_Info>
+    <Expire_Info>
+      <Has_Expire_Info>N</Has_Expire_Info>
+      <Expire_Count></Expire_Count>
+      <Expire_Based_On></Expire_Based_On>
+      <Expire_Other_Info></Expire_Other_Info>
+      <Expire_Month></Expire_Month>
+      <Expire_Day></Expire_Day>
+      <Expire_Year></Expire_Year>
+    </Expire_Info>
+  </Program_Info>
+
+  <Program_Descriptions>
+    <English>
+      <Keywords>subscription tracker, expense manager, budget planner, AI finance, personal finance, subscription management, money saver</Keywords>
+      <Char_Desc_45>AI-powered subscription &amp; expense tracker</Char_Desc_45>
+      <Char_Desc_80>Suba: AI-powered subscription tracking, expense management &amp; budget planning app</Char_Desc_80>
+      <Char_Desc_250>Suba is a free AI-powered personal finance app that tracks your recurring subscriptions, manages daily expenses and budgets, and provides smart insights powered by Google Gemini to help you save money. Collaborate on shared plans with friends and family.</Char_Desc_250>
+      <Char_Desc_450>Suba is a comprehensive, AI-powered mobile application designed to help users take control of their finances. It effortlessly tracks recurring subscriptions so you never pay for unwanted renewals, manages daily expenses and budgets, and lets you collaborate on shared financial plans with friends. Powered by Google Gemini AI, Suba analyzes your spending habits to provide smart, actionable insights that help you save more every month. Features include analytics dashboards, payment reminders, and more.</Char_Desc_450>
+      <Char_Desc_2000>Suba is a comprehensive, AI-powered mobile application built with React Native and backed by a robust Node.js server. It is designed to help users take full control of their personal finances.
+
+Key Features:
+- Subscription Tracking: Keep track of all your recurring subscriptions (Netflix, Spotify, Gym, etc.) in one place. Never get surprised by an auto-renewal again. Receive timely payment reminders before billing dates.
+- Expense and Budget Management: Log daily expenses, categorize them, and set up monthly budget limits to stay on top of your financial goals.
+- AI Financial Insights: Powered by Google Gemini 2.5 Flash, Suba analyzes your spending habits and provides personalized, actionable insights and tips to help you save money.
+- Shared Plans: Collaborate on shared subscriptions or joint budgets with friends and family. Track who owes what and manage group expenses seamlessly.
+- Analytics Dashboard: Visual charts and breakdowns of your spending trends over time, helping you understand exactly where your money goes.
+- Payment Reminders: Get notified before your subscriptions renew so you can decide whether to keep or cancel them.
+
+Suba is completely free to use and contains no ads. Your financial data is securely stored and never shared with third parties.</Char_Desc_2000>
+    </English>
+  </Program_Descriptions>
+
+  <Web_Info>
+    <Application_URLs>
+      <Application_Info_URL>https://github.com/kingjethro999/suba</Application_Info_URL>
+      <Application_Order_URL></Application_Order_URL>
+      <Application_Screenshot_URL></Application_Screenshot_URL>
+      <Application_Icon_URL></Application_Icon_URL>
+      <Application_XML_File_URL>https://github.com/kingjethro999/Suba/raw/main/pad/suba.xml</Application_XML_File_URL>
+    </Application_URLs>
+    <Download_URLs>
+      <Primary_Download_URL>https://github.com/kingjethro999/Suba/releases/download/v1.0.1/suba.apk</Primary_Download_URL>
+      <Secondary_Download_URL></Secondary_Download_URL>
+      <Additional_Download_URL_1></Additional_Download_URL_1>
+      <Additional_Download_URL_2></Additional_Download_URL_2>
+    </Download_URLs>
+  </Web_Info>
+</XML_DIZ_INFO>

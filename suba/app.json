@@ -1,12 +1,11 @@
 {
   "expo": {
-    "name": "suba",
+    "name": "Suba",
     "slug": "suba-frontend",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,17 +19,15 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.bfg.subafrontend"
+      "package": "com.bfg.suba"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
       [
         "expo-image-picker",
         {
@@ -41,9 +38,8 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "2e94c13b-cd06-4ab6-8647-ccc43413e36e"
+        "projectId": "bf150305-9136-4ba5-81b3-83e83ee9fc77"
       }
-    },
-    "owner": "bfg"
+    }
   }
 }
