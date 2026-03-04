@@ -8,10 +8,10 @@
 
   <Company_Info>
     <Company_Name>THE BEST STUDIOS</Company_Name>
-    <Address_1></Address_1>
-    <City_Town></City_Town>
-    <State_Province></State_Province>
-    <Zip_Postal_Code></Zip_Postal_Code>
+    <Address_1>Lagos</Address_1>
+    <City_Town>Lagos</City_Town>
+    <State_Province>Lagos</State_Province>
+    <Zip_Postal_Code>100001</Zip_Postal_Code>
     <Country>Nigeria</Country>
     <Company_WebSite_URL>https://github.com/kingjethro999</Company_WebSite_URL>
     <Contact_First_Name>King</Contact_First_Name>
@@ -86,7 +86,7 @@ Suba is completely free to use and contains no ads. Your financial data is secur
       <Application_XML_File_URL>https://github.com/kingjethro999/Suba/raw/main/pad/suba.xml</Application_XML_File_URL>
     </Application_URLs>
     <Download_URLs>
-      <Primary_Download_URL>https://github.com/kingjethro999/Suba/releases/download/v1.0.1/suba.apk</Primary_Download_URL>
+      <Primary_Download_URL>https://github.com/kingjethro999/Suba/releases/download/v1.0.1/application-f3602309-47cb-411b-af12-4ef93d6561b5.apk</Primary_Download_URL>
       <Secondary_Download_URL></Secondary_Download_URL>
       <Additional_Download_URL_1></Additional_Download_URL_1>
       <Additional_Download_URL_2></Additional_Download_URL_2>
