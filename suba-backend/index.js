@@ -16,6 +16,8 @@ import aiInsightsRoutes from './routes/aiInsightsRoutes.js';
 import budgetRoutes from './routes/budgetRoutes.js';
 import budgetReportsRoutes from './routes/budgetReportsRoutes.js';
 import notificationsRoutes from './routes/notificationsRoutes.js';
+import statsRoutes from './routes/statsRoutes.js';
+
 
 dotenv.config();
 
@@ -38,6 +40,8 @@ app.use('/api/ai', aiInsightsRoutes);
 app.use('/api/budget', budgetRoutes);
 app.use('/api/budget-reports', budgetReportsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/stats', statsRoutes);
+
 
 app.get('/api/shared-plans/test', (req, res) => res.json({ ok: true, route: 'shared-plans' }));
 app.get('/api/payments/test', (req, res) => res.json({ message: 'Payments endpoint is working!' }));
