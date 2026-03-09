@@ -47,14 +47,14 @@ function extractJsonArray(text) {
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed)) return parsed;
     if (parsed && Array.isArray(parsed.insights)) return parsed.insights;
-  } catch {}
+  } catch { }
 
   const arrMatch = cleaned.match(/\[[\s\S]*\]/);
   if (arrMatch) {
     try {
       const parsed = JSON.parse(arrMatch[0]);
       if (Array.isArray(parsed)) return parsed;
-    } catch {}
+    } catch { }
   }
 
   const objMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -62,7 +62,7 @@ function extractJsonArray(text) {
     try {
       const parsed = JSON.parse(objMatch[0]);
       if (parsed && Array.isArray(parsed.insights)) return parsed.insights;
-    } catch {}
+    } catch { }
   }
 
   return [];
@@ -218,6 +218,38 @@ export async function generateInsights(features) {
   return heuristicInsights(features);
 }
 
+export async function extractSubscriptionsFromText(text) {
+  if (!model || !text) return [];
+
+  const prompt = `
+Extract subscription information from the following email text/transaction alert.
+Return a JSON array of objects with these fields:
+- name: (e.g., "Netflix", "Spotify", "DStv")
+- amount: (number)
+- currency: (3-letter code, e.g., "NGN", "USD")
+- billing_cycle: ("daily", "weekly", "monthly", "yearly")
+- next_billing_date: (YYYY-MM-DD format if date is mentioned, otherwise guess based on today)
+- status: ("active", "cancelled")
+- category: (e.g., "Streaming", "Utilities", "Gaming")
+
+If no clear subscription is found, return an empty array [].
+Email Text:
+"""
+${text}
+"""
+`.trim();
+
+  try {
+    const resp = await model.generateContent(prompt);
+    const resultText = typeof resp?.response?.text === 'function' ? resp.response.text() : '';
+    return extractJsonArray(resultText);
+  } catch (e) {
+    console.error('Gemini extraction error:', e);
+    return [];
+  }
+}
+
 export default {
   generateInsights,
+  extractSubscriptionsFromText,
 };
