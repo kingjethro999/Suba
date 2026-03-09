@@ -4,6 +4,7 @@ import { dbPromise } from '../models/db.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 import geminiService from '../services/geminiAIService.js';
 
+
 const router = express.Router();
 
 // See requests in server logs
